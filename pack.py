@@ -41,9 +41,11 @@ def run_command(command, shell=True):
 
 parser = argparse.ArgumentParser()
 parser.add_argument("app_version", help="version to tag deb file with")
-parser.add_argument("app_location", default=os.getcwd(), nargs="?", help="location of app to package")
+parser.add_argument("app_location", default=os.getcwd(), nargs="?", type=os.path.abspath, help="location of app to package")
+parser.add_argument("--dest", default=os.getcwd(), type=os.path.abspath, help="where to output deb file")
 args = parser.parse_args()
 
+if args.app_location.endswith(os.sep): args.app_location = args.app_location[:-1]
 os.environ["APP_LOCATION"] = args.app_location
 
 CONFIG_KEYS = {
@@ -127,3 +129,6 @@ for script_name in SCRIPTS:
 check_call([join_path(os.environ["APP_LOCATION"], "debpack", "build")])
 run_command(["dpkg-deb", "--build", dirname], shell=False)
 shutil.rmtree(dirname)
+
+# Move to final destination
+shutil.move(dirname + ".deb", args.dest)
