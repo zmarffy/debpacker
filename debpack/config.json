@@ -1,0 +1,18 @@
+{
+	"section" : "utils",
+	"priority" : "optional",
+	"maintainer" : {
+		"name" : "Zeke Marffy",
+		"email" : "zmarffy@me.com"
+	},
+	"architecture" : "all",
+	"depends" : [
+		"python3"
+	],
+	"description" : "pack a deb file from a project",
+	"build" : {
+		"files" : {
+			"pack.py" : "/usr/bin/debpack"
+		}
+	}
+}
