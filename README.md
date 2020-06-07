@@ -24,11 +24,11 @@ Install the deb package, which was, fun fact, created by `debpack` itself
 When working on an application, a folder should be placed in the root of the source code called `debpack`. The structure of this folder is as shown.
 
 ```
-source_code_folder
+source_code_folder/
 └── debpack/
     ├── config.json
     ├── build
-    └── maintainer_scripts
+    └── maintainer_scripts/
         ├──preinst
         ├──new-preinst
         ├──old-preinst
