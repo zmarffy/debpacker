@@ -85,7 +85,7 @@ if __name__ == "__main__":
 		},
 		"maintainer" : {
 			"default" : "{} <{}>".format(run_command("git config user.name"), run_command("git config user.email")),
-			"validation" : lambda x: bool(re.compile("(.+) <.+@.+>").match(x)),
+			"validation" : lambda x: bool(re.compile(".+ <.+@.+\..+>").match(x)),
 			"transform" : transform_maintainer
 		},
 		"description" : {
@@ -99,10 +99,6 @@ if __name__ == "__main__":
 	with open(join_path(os.environ["SRC"], "debpack", "config.json"), "r") as f: config = json.loads(f.read().strip())
 	LOGGER.debug("Config loaded")
 
-	# Work in tmp directory
-	os.chdir(os.sep + "tmp")
-	LOGGER.debug("Working in temp directory")
-
 	# Set defaults, transform, and validate
 	for k, v in CONFIG_KEYS.items():
 		if k not in config.keys():
@@ -113,37 +109,43 @@ if __name__ == "__main__":
 			else:
 				raise ValueError("{} cannot be empty".format(k))
 		config[k] = CONFIG_KEYS[k]["transform"](config[k])
-		if CONFIG_KEYS[k]["validation"] is not None and not CONFIG_KEYS[k]["validation"](config[k]): raise ValueError("{} failed validation (offending value: \"{}\")".format(k, v))
+		if CONFIG_KEYS[k]["validation"] is not None and not CONFIG_KEYS[k]["validation"](config[k]): raise ValueError("{} failed validation (offending value: \"{}\")".format(k, config[k]))
 	# Set remaining keys
 	config["version"] = args.app_version
 	build_script = join_path(os.environ["SRC"], "debpack", "build")
 
 	try:
-		# Make structue
+		# Make structure
 		LOGGER.debug("Making deb file structure")
 		dirname = "{}_{}".format(config["package"], config["version"])
+		original_files = os.listdir() + [dirname + ".deb"]
+
+		# Work in tmp directory
+		os.chdir(os.sep + "tmp")
+		LOGGER.debug("Working in temp directory")
 		os.environ["DEST"] = join_path(os.sep, "tmp", dirname)
-		pathlib.Path(dirname, "DEBIAN").mkdir(parents=True)
+		pathlib.Path(os.environ["DEST"], "DEBIAN").mkdir(parents=True)
 
 		# Write control file
 		s = ""
-		for k, v in config.items():
+		for k in list(CONFIG_KEYS.keys()) + ["version"]:
+			v = config[k]
 			if isinstance(v, list):
 				v = ", ".join(v)
 			s += "{}: {}\n".format(k.capitalize(), v)
 		LOGGER.debug("Writing control file with contents:\n{}".format(s))
-		with open(join_path(dirname, "DEBIAN", "control"), "w") as f: f.write(s)
+		with open(join_path(os.environ["DEST"], "DEBIAN", "control"), "w") as f: f.write(s)
 
 		# Throw in extra scripts
 		for script_name in SCRIPTS:
-			script_file = join_path(os.environ["SRC"], "debpack", script_name)
+			script_file = join_path(os.environ["SRC"], "debpack", "maintainer_scripts", script_name)
 			if os.path.isfile(script_file):
 				LOGGER.debug("Adding {}".format(script_name))
 				shutil.copy2(script_file, join_path(os.environ["DEST"], "DEBIAN"))
 
 		# Build
-		LOGGER.debug("Running build")
 		if os.path.isfile(build_script):
+			LOGGER.debug("Running build")
 			check_call([build_script])
 		else:
 			LOGGER.debug("No build script to execute")
@@ -161,5 +163,13 @@ if __name__ == "__main__":
 
 	finally:
 		# Clean up
-		LOGGER.debug("Cleaning up")
+		LOGGER.debug("Cleaning up temp folder")
 		shutil.rmtree(dirname)
+		os.chdir(args.app_location)
+		LOGGER.debug("Working in source folder")
+		LOGGER.debug("Cleaning up source folder")
+		for f in [f for f in os.listdir() if f not in original_files]:
+			if os.path.isfile(f):
+				os.remove(f)
+			elif os.path.isdir(f):
+				shutil.rmtree(join_path(os.environ["SRC"], f))
