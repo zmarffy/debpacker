@@ -155,7 +155,7 @@ if __name__ == "__main__":
 			script_file = join_path(os.environ["SRC"], "debpack", "maintainer_scripts", script_name)
 			if os.path.isfile(script_file):
 				LOGGER.debug("Adding {}".format(script_name))
-				copy(script_file, join_path(os.environ["DEST"], "DEBIAN"), verbose=True)
+				copy(script_file, join_path(os.environ["DEST"], "DEBIAN"), verbose=verbose)
 
 		# Build
 		if os.path.isfile(build_script):
@@ -168,7 +168,7 @@ if __name__ == "__main__":
 			dest_is_folder = dest.endswith(os.sep)
 			folders = dest if dest_is_folder else os.sep.join(dest.split(os.sep)[:-1])
 			check_output(["mkdir", "-p", folders])
-			copy(join_path(os.environ["SRC"], src), dest, exclude=["debpack", ".git", ".gitignore"], verbose=True)
+			copy(join_path(os.environ["SRC"], src), dest, exclude=["debpack", ".git", ".gitignore"], verbose=verbose)
 		LOGGER.debug("Building deb")
 		run_command(["dpkg-deb", "--build", dirname], shell=False)
 
