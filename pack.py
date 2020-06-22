@@ -6,7 +6,6 @@ import os
 from os.path import join as join_path
 from subprocess import check_output, check_call
 import re
-import shutil
 import pathlib
 import logging
 
@@ -43,6 +42,20 @@ def transform_maintainer(maint):
 def run_command(command, shell=True):
 	return check_output(command, shell=shell).decode().strip()
 
+def copy(src, dest, exclude=[], verbose=False):
+	cmd = ["rsync", "-a", src, dest]
+	if verbose: cmd[1] += "v"
+	for e in exclude: cmd += ["--exclude", e]
+	out = run_command(cmd, shell=False)
+	if verbose: print(out)
+	return out
+
+def move(src, dest):
+	return run_command(["mv", src, dest], shell=False)
+
+def rm(src):
+	return run_command(["rm", "-r", src], shell=False)
+
 if __name__ == "__main__":
 
 	parser = argparse.ArgumentParser()
@@ -54,8 +67,9 @@ if __name__ == "__main__":
 
 	if args.app_location.endswith(os.sep): args.app_location = args.app_location[:-1]
 	os.environ["SRC"] = args.app_location
-	logging.basicConfig()
+	logging.basicConfig(format="%(asctime)s %(message)s")
 	LOGGER.setLevel(args.log_level)
+	verbose = LOGGER.level > logging.INFO
 
 	CONFIG_KEYS = {
 		"package" : {
@@ -141,7 +155,7 @@ if __name__ == "__main__":
 			script_file = join_path(os.environ["SRC"], "debpack", "maintainer_scripts", script_name)
 			if os.path.isfile(script_file):
 				LOGGER.debug("Adding {}".format(script_name))
-				shutil.copy2(script_file, join_path(os.environ["DEST"], "DEBIAN"))
+				copy(script_file, join_path(os.environ["DEST"], "DEBIAN"), verbose=True)
 
 		# Build
 		if os.path.isfile(build_script):
@@ -153,23 +167,19 @@ if __name__ == "__main__":
 			dest = dirname + dest
 			dest_is_folder = dest.endswith(os.sep)
 			folders = dest if dest_is_folder else os.sep.join(dest.split(os.sep)[:-1])
-			pathlib.Path(folders).mkdir(parents=True, exist_ok=True)
-			shutil.copy2(join_path(os.environ["SRC"], src), dest)
+			check_output(["mkdir", "-p", folders])
+			copy(join_path(os.environ["SRC"], src), dest, exclude=["debpack", ".git", ".gitignore"], verbose=True)
 		LOGGER.debug("Building deb")
 		run_command(["dpkg-deb", "--build", dirname], shell=False)
 
 		# Move to final destination
-		shutil.move(dirname + ".deb", args.dest)
+		move(dirname + ".deb", args.dest)
 
 	finally:
 		# Clean up
 		LOGGER.debug("Cleaning up temp folder")
-		shutil.rmtree(dirname)
+		rm(dirname)
 		os.chdir(args.app_location)
 		LOGGER.debug("Working in source folder")
 		LOGGER.debug("Cleaning up source folder")
-		for f in [f for f in os.listdir() if f not in original_files]:
-			if os.path.isfile(f):
-				os.remove(f)
-			elif os.path.isdir(f):
-				shutil.rmtree(join_path(os.environ["SRC"], f))
+		for f in [f for f in os.listdir() if f not in original_files]: rm(join_path(os.environ["SRC"], f))
