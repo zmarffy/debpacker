@@ -18,7 +18,7 @@ SCRIPTS = [
 	"postinst",
 	"old-postinst",
 	"conflictor's-postinst",
-	"deconfigured's-postinst"
+	"deconfigured's-postinst",
 	"prerm",
 	"old-prerm",
 	"new-prerm",
