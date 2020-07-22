@@ -164,7 +164,7 @@ if __name__ == "__main__":
 		else:
 			LOGGER.debug("No build script to execute")
 		for src, dest in config["build"]["files"].items():
-			dest = dest[1:]
+			if dest.startswith(os.sep): dest = dest[1:]
 			dest_is_folder = dest.endswith(os.sep)
 			folders = dest if dest_is_folder else os.sep.join(dest.split(os.sep)[:-1])
 			check_output(["mkdir", "-p", folders])
