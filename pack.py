@@ -4,7 +4,7 @@ import argparse
 import json
 import os
 from os.path import join as join_path
-from subprocess import check_output, check_call
+from subprocess import check_output, check_call, CalledProcessError
 import re
 import pathlib
 import logging
@@ -135,10 +135,10 @@ if __name__ == "__main__":
 		original_files = os.listdir() + [dirname + ".deb"]
 
 		# Work in tmp directory
-		os.chdir(os.sep + "tmp")
-		LOGGER.debug("Working in temp directory")
+		LOGGER.debug("Working in temp folder")
 		os.environ["DEST"] = join_path(os.sep, "tmp", dirname)
 		pathlib.Path(os.environ["DEST"], "DEBIAN").mkdir(parents=True)
+		os.chdir(os.environ["DEST"])
 
 		# Write control file
 		s = ""
@@ -148,14 +148,14 @@ if __name__ == "__main__":
 				v = ", ".join(v)
 			s += "{}: {}\n".format(k.capitalize(), v)
 		LOGGER.debug("Writing control file with contents:\n{}".format(s))
-		with open(join_path(os.environ["DEST"], "DEBIAN", "control"), "w") as f: f.write(s)
+		with open(join_path("DEBIAN", "control"), "w") as f: f.write(s)
 
 		# Throw in extra scripts
 		for script_name in SCRIPTS:
 			script_file = join_path(os.environ["SRC"], "debpack", "maintainer_scripts", script_name)
 			if os.path.isfile(script_file):
 				LOGGER.debug("Adding {}".format(script_name))
-				copy(script_file, join_path(os.environ["DEST"], "DEBIAN"), verbose=verbose)
+				copy(script_file, "DEBIAN", verbose=verbose)
 
 		# Build
 		if os.path.isfile(build_script):
@@ -164,12 +164,13 @@ if __name__ == "__main__":
 		else:
 			LOGGER.debug("No build script to execute")
 		for src, dest in config["build"]["files"].items():
-			dest = dirname + dest
+			dest = dest[1:]
 			dest_is_folder = dest.endswith(os.sep)
 			folders = dest if dest_is_folder else os.sep.join(dest.split(os.sep)[:-1])
 			check_output(["mkdir", "-p", folders])
 			copy(join_path(os.environ["SRC"], src), dest, exclude=["debpack", ".git", ".gitignore"], verbose=verbose)
 		LOGGER.debug("Building deb")
+		os.chdir("..")
 		run_command(["dpkg-deb", "--build", dirname], shell=False)
 
 		# Move to final destination
@@ -178,7 +179,10 @@ if __name__ == "__main__":
 	finally:
 		# Clean up
 		LOGGER.debug("Cleaning up temp folder")
-		rm(dirname)
+		try:
+			rm(os.environ["DEST"])
+		except CalledProcessError:
+			LOGGER.debug("Could not delete {}".format(dirname))
 		os.chdir(args.app_location)
 		LOGGER.debug("Working in source folder")
 		LOGGER.debug("Cleaning up source folder")
