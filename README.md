@@ -53,6 +53,8 @@ The `config.json` file is the file that determines what metadata the Debian pack
 
 This is the script that is run in order to compile or otherwise build the source code files in a certain manner. You should use it to do something with the source code files and place them back into the original source directory. This is provided for convenience as the evironment variable `SRC`.
 
+Why do I use this? Because I never learned `make`! Yay, reinventing the wheel!
+
 #### The `maintainer-scripts`
 
 These are the `apt` control scripts that run under certain conditions. See [here](https://www.debian.org/doc/manuals/maint-guide/dreq.en.html) for more info.
@@ -63,7 +65,7 @@ These are the `apt` control scripts that run under certain conditions. See [here
 * Possibly add integration to `github-release`? Or at least explain how to do that
 * Automatically pack README files and assign them to another command?
 * Automatic setup of a local/real APT repository to drop packages into
-* Use `DEST` environment variable to store stuff rather than the current "compile into source directory" methodology
+* Use `dpkg-buildpackage` for multi-threaded packing (pretty much necessary for packages over 100 MB)
 
 ## Debugging tips
 
