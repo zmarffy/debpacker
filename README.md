@@ -1,6 +1,6 @@
 # debpack
 
-debpack is a Debian package creation tool. It builds `deb` files from source code based off a configuration file and build script.
+`debpack` is a Debian package creation tool. It builds `deb` files from source code based off a configuration file and build script.
 
 ## Important features
 
