@@ -175,6 +175,7 @@ if __name__ == "__main__":
 			run_command(["mkdir", "-p", folders], shell=False)
 			copy(join_path(os.environ["SRC"], src), join_path(dest), exclude=["debpack", ".git", ".gitignore"], verbose=verbose)
 		with open("debian-binary", "w") as f: f.write("2.0\n")
+		# Here, we will manually tar stuff because dpkg-deb does not use mutliple cores
 		LOGGER.debug("Zipping control")
 		run_command("tar --use-compress-program=pigz -cf control.tar.gz -C control .")
 		LOGGER.debug("Zipping data")
@@ -182,9 +183,6 @@ if __name__ == "__main__":
 		LOGGER.debug("Cleaning all but tarballs in build folder")
 		rm("control")
 		rm("data")
-		# At this point, we are in the temporary directory
-		# Here, we will manually tar stuff because dpkg-deb does not use mutliple cores
-		# You know, this would be useful if your PC actually has multiple cores
 		run_command(["ar", "r", dirname + ".deb", "debian-binary", "control.tar.gz", "data.tar.gz"], shell=False)
 
 		# Move to final destination
