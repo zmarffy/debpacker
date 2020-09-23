@@ -1,6 +1,6 @@
 # debpack
 
-debpack is a Debian package creation tool. It builds `deb` files from source code based off a configuration file and build script.
+`debpack` is a Debian package creation tool. It builds `deb` files from source code based off a configuration file and build script.
 
 ## Important features
 
@@ -51,7 +51,7 @@ The `config.json` file is the file that determines what metadata the Debian pack
 
 #### The `build` script
 
-This is the script that is run in order to compile or otherwise build the source code files in a certain manner. You should use it to do something with the source code files and place them back into the original source directory. This is provided for convenience as the evironment variable `SRC`.
+This is the script that is run in order to compile or otherwise build the source code files in a certain manner. You should use it to do something with the source code files and place them into the target folder. This is provided for convenience as the evironment variable `SRC`.
 
 Why do I use this? Because I never learned `make`! Yay, reinventing the wheel!
 
