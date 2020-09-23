@@ -137,7 +137,8 @@ if __name__ == "__main__":
 		# Work in tmp directory
 		LOGGER.debug("Working in temp folder")
 		os.environ["DEST"] = join_path(os.sep, "tmp", dirname)
-		pathlib.Path(os.environ["DEST"], "DEBIAN").mkdir(parents=True)
+		pathlib.Path(os.environ["DEST"], "control").mkdir(parents=True)
+		pathlib.Path(os.environ["DEST"], "data").mkdir(parents=True)
 		os.chdir(os.environ["DEST"])
 
 		# Write control file
@@ -148,30 +149,41 @@ if __name__ == "__main__":
 				v = ", ".join(v)
 			s += "{}: {}\n".format(k.capitalize(), v)
 		LOGGER.debug("Writing control file with contents:\n{}".format(s))
-		with open(join_path("DEBIAN", "control"), "w") as f: f.write(s)
+		with open(join_path("control", "control"), "w") as f: f.write(s)
 
 		# Throw in extra scripts
 		for script_name in SCRIPTS:
 			script_file = join_path(os.environ["SRC"], "debpack", "maintainer_scripts", script_name)
 			if os.path.isfile(script_file):
 				LOGGER.debug("Adding {}".format(script_name))
-				copy(script_file, "DEBIAN", verbose=verbose)
+				copy(script_file, "control", verbose=verbose)
 
 		# Build
 		if os.path.isfile(build_script):
-			LOGGER.debug("Running build")
+			LOGGER.debug("Running build script")
 			check_call([build_script])
 		else:
 			LOGGER.debug("No build script to execute")
 		for src, dest in config["build"]["files"].items():
 			if dest.startswith(os.sep): dest = dest[1:]
+			dest = join_path("data", dest)
 			dest_is_folder = dest.endswith(os.sep)
 			folders = dest if dest_is_folder else os.sep.join(dest.split(os.sep)[:-1])
-			check_output(["mkdir", "-p", folders])
-			copy(join_path(os.environ["SRC"], src), dest, exclude=["debpack", ".git", ".gitignore"], verbose=verbose)
-		LOGGER.debug("Building deb")
-		os.chdir("..")
-		run_command(["dpkg-deb", "--build", dirname], shell=False)
+			run_command(["mkdir", "-p", folders], shell=False)
+			copy(join_path(os.environ["SRC"], src), join_path(dest), exclude=["debpack", ".git", ".gitignore"], verbose=verbose)
+		with open("debian-binary", "w") as f: f.write("2.0\n")
+		os.system("ls data")
+		LOGGER.debug("Zipping control")
+		run_command("tar --use-compress-program=pigz -cf control.tar.gz -C control .")
+		LOGGER.debug("Zipping data")
+		run_command("tar --use-compress-program=pigz -cf data.tar.gz -C data .")
+		LOGGER.debug("Cleaning all but tarballs in build folder")
+		rm("control")
+		rm("data")
+		# At this point, we are in the temporary directory
+		# Here, we will manually tar stuff because dpkg-deb does not use mutliple cores
+		# You know, this would be useful if your PC actually has multiple cores
+		run_command(["ar", "r", dirname + ".deb", "debian-binary", "control.tar.gz", "data.tar.gz"], shell=False)
 
 		# Move to final destination
 		move(dirname + ".deb", args.dest)
@@ -180,6 +192,7 @@ if __name__ == "__main__":
 		# Clean up
 		LOGGER.debug("Cleaning up temp folder")
 		try:
+			pass
 			rm(os.environ["DEST"])
 		except CalledProcessError:
 			LOGGER.debug("Could not delete {}".format(dirname))

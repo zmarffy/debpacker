@@ -12,7 +12,7 @@
 	"description" : "pack a deb file from a project",
 	"build" : {
 		"files" : {
-			"pack.py" : "/usr/bin/debpack"
+			"debpack.py" : "/usr/bin/debpack"
 		}
 	}
 }
