@@ -136,10 +136,11 @@ if __name__ == "__main__":
 
 		# Work in tmp directory
 		LOGGER.debug("Working in temp folder")
-		os.environ["DEST"] = join_path(os.sep, "tmp", dirname)
-		pathlib.Path(os.environ["DEST"], "control").mkdir(parents=True)
-		pathlib.Path(os.environ["DEST"], "data").mkdir(parents=True)
-		os.chdir(os.environ["DEST"])
+		destination = join_path(os.sep, "tmp", dirname)
+		os.environ["DEST"] = join_path(destination, "data")
+		pathlib.Path(destination, "control").mkdir(parents=True)
+		pathlib.Path(destination, "data").mkdir(parents=True)
+		os.chdir(destination)
 
 		# Write control file
 		s = ""
@@ -160,8 +161,10 @@ if __name__ == "__main__":
 
 		# Build
 		if os.path.isfile(build_script):
+			os.chdir("data")
 			LOGGER.debug("Running build script")
 			check_call([build_script])
+			os.chdir("..")
 		else:
 			LOGGER.debug("No build script to execute")
 		for src, dest in config["build"]["files"].items():
@@ -192,7 +195,7 @@ if __name__ == "__main__":
 		LOGGER.debug("Cleaning up temp folder")
 		try:
 			pass
-			rm(os.environ["DEST"])
+			rm(destination)
 		except CalledProcessError:
 			LOGGER.debug("Could not delete {}".format(dirname))
 		os.chdir(args.app_location)
