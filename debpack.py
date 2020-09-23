@@ -28,6 +28,9 @@ SCRIPTS = [
 	"new-postrm"
 ]
 
+def capitalize_each_word(s, delimiter):
+	return delimiter.join([w.capitalize() for w in s.split(delimiter)])
+
 def transform_description(desc):
 	new_desc = ""
 	for i, line in enumerate(desc.split("\n")):
@@ -124,15 +127,19 @@ if __name__ == "__main__":
 				raise ValueError("{} cannot be empty".format(k))
 		config[k] = CONFIG_KEYS[k]["transform"](config[k])
 		if CONFIG_KEYS[k]["validation"] is not None and not CONFIG_KEYS[k]["validation"](config[k]): raise ValueError("{} failed validation (offending value: \"{}\")".format(k, config[k]))
+
 	# Set remaining keys
-	config["version"] = args.app_version
+	config["version"] = args.app_version if re.search("-[0-9]$", args.app_version) else args.app_version + "-1"
+
+	# Ser extra vars
 	build_script = join_path(os.environ["SRC"], "debpack", "build")
+	architecture = config["architecture"]
 
 	try:
 		# Make structure
 		LOGGER.debug("Making deb file structure")
 		dirname = "{}_{}".format(config["package"], config["version"])
-		original_files = os.listdir() + [dirname + ".deb"]
+		original_files = os.listdir() + [dirname + "_" + architecture + ".deb"]
 
 		# Work in tmp directory
 		LOGGER.debug("Working in temp folder")
@@ -142,17 +149,7 @@ if __name__ == "__main__":
 		pathlib.Path(destination, "data").mkdir(parents=True)
 		os.chdir(destination)
 
-		# Write control file
-		s = ""
-		for k in list(CONFIG_KEYS.keys()) + ["version"]:
-			v = config[k]
-			if isinstance(v, list):
-				v = ", ".join(v)
-			s += "{}: {}\n".format(k.capitalize(), v)
-		LOGGER.debug("Writing control file with contents:\n{}".format(s))
-		with open(join_path("control", "control"), "w") as f: f.write(s)
-
-		# Throw in extra scripts
+		# Throw in maintainer scripts
 		for script_name in SCRIPTS:
 			script_file = join_path(os.environ["SRC"], "debpack", "maintainer_scripts", script_name)
 			if os.path.isfile(script_file):
@@ -174,7 +171,22 @@ if __name__ == "__main__":
 			folders = dest if dest_is_folder else os.sep.join(dest.split(os.sep)[:-1])
 			run_command(["mkdir", "-p", folders], shell=False)
 			copy(join_path(os.environ["SRC"], src), join_path(dest), exclude=["debpack", ".git", ".gitignore"], verbose=verbose)
+		# Get another value that can't be determined until after build
+		config["installed-size"] = run_command("du -s -B1 | cut -f -1")
+
+		# Write that one extra file
 		with open("debian-binary", "w") as f: f.write("2.0\n")
+
+		# Write control file
+		s = ""
+		for k in list(CONFIG_KEYS.keys()) + ["version", "installed-size"]:
+			v = config[k]
+			if isinstance(v, list):
+				v = ", ".join(v)
+			s += "{}: {}\n".format(capitalize_each_word(k, "-"), v)
+		LOGGER.debug("Writing control file with contents:\n{}".format(s))
+		with open(join_path("control", "control"), "w") as f: f.write(s)
+
 		# Here, we will manually tar stuff because dpkg-deb does not use mutliple cores
 		LOGGER.debug("Zipping control")
 		run_command("tar --use-compress-program=pigz -cf control.tar.gz -C control .")
@@ -183,10 +195,10 @@ if __name__ == "__main__":
 		LOGGER.debug("Cleaning all but tarballs in build folder")
 		rm("control")
 		rm("data")
-		run_command(["ar", "r", dirname + ".deb", "debian-binary", "control.tar.gz", "data.tar.gz"], shell=False)
+		run_command(["ar", "r", dirname + "_" + architecture + ".deb", "debian-binary", "control.tar.gz", "data.tar.gz"], shell=False)
 
 		# Move to final destination
-		move(dirname + ".deb", args.dest)
+		move(dirname + "_" + architecture + ".deb", args.dest)
 
 	finally:
 		# Clean up

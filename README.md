@@ -65,6 +65,7 @@ These are the `apt` control scripts that run under certain conditions. See [here
 * Possibly add integration to `github-release`? Or at least explain how to do that
 * Automatically pack README files and assign them to another command?
 * Automatic setup of a local/real APT repository to drop packages into
+* Add changelog support
 
 ## Debugging tips
 
