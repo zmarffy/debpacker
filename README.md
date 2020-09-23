@@ -11,7 +11,7 @@
 
 * `dpkg`, but, c'mon, you should already have that
 * `python3`
-
+* `pigz`
 
 ## Setup
 
@@ -65,7 +65,6 @@ These are the `apt` control scripts that run under certain conditions. See [here
 * Possibly add integration to `github-release`? Or at least explain how to do that
 * Automatically pack README files and assign them to another command?
 * Automatic setup of a local/real APT repository to drop packages into
-* Use `dpkg-buildpackage` for multi-threaded packing (pretty much necessary for packages over 100 MB)
 
 ## Debugging tips
 
