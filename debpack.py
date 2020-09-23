@@ -6,6 +6,7 @@ import os
 from os.path import join as join_path
 from subprocess import check_output, check_call, CalledProcessError
 import re
+from math import ceil
 import pathlib
 import logging
 
@@ -172,7 +173,7 @@ if __name__ == "__main__":
 			run_command(["mkdir", "-p", folders], shell=False)
 			copy(join_path(os.environ["SRC"], src), join_path(dest), exclude=["debpack", ".git", ".gitignore"], verbose=verbose)
 		# Get another value that can't be determined until after build
-		config["installed-size"] = run_command("du -s -B1 | cut -f -1")
+		config["installed-size"] = ceil(int(run_command("du -s -B1 data | cut -f -1")) / 1024)
 
 		# Write that one extra file
 		with open("debian-binary", "w") as f: f.write("2.0\n")
