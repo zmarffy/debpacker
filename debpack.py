@@ -172,7 +172,6 @@ if __name__ == "__main__":
 			run_command(["mkdir", "-p", folders], shell=False)
 			copy(join_path(os.environ["SRC"], src), join_path(dest), exclude=["debpack", ".git", ".gitignore"], verbose=verbose)
 		with open("debian-binary", "w") as f: f.write("2.0\n")
-		os.system("ls data")
 		LOGGER.debug("Zipping control")
 		run_command("tar --use-compress-program=pigz -cf control.tar.gz -C control .")
 		LOGGER.debug("Zipping data")
