@@ -6,6 +6,8 @@ import os
 from os.path import join as join_path
 from subprocess import check_output, check_call, CalledProcessError
 import re
+import datetime
+import pytz
 from math import ceil
 import pathlib
 import logging
@@ -60,13 +62,41 @@ def move(src, dest):
 def rm(src):
 	return run_command(["rm", "-r", src], shell=False)
 
+def get_commit_messages(last_commit_id_to_include):
+	out = run_command(["git", "-C", os.environ["SRC"], "reflog", "--no-color"], shell=False)
+	commits = []
+	for commit in out.split("\n"):
+		data = commit.split("commit: ", 1)
+		if len(data) != 2:
+			continue
+		commits.append((data[0].split(" ")[0], data[1]))
+		if data[0].startswith(last_commit_id_to_include):
+			break
+	return commits
+
+def parse_changelog(s):
+	if s is None or s == "":
+		return None
+	else:
+		option = "message"
+		message = s
+		for o in ["auto", "commit_id", "message"]:
+			if s.startswith(o + "="):
+				option = o
+				message = s.split("=", 1)[1]
+				break
+		return option, message
+
 if __name__ == "__main__":
 
 	parser = argparse.ArgumentParser()
 	parser.add_argument("app_version", help="version to tag deb file with")
 	parser.add_argument("app_location", default=os.getcwd(), nargs="?", type=os.path.abspath, help="location of app to package")
 	parser.add_argument("--dest", default=os.getcwd(), type=os.path.abspath, help="where to output deb file")
-	parser.add_argument("--log-level", default="INFO", choices=["CRITICAL", "50", "ERROR", "40", "WARNING", "30", "INFO", "20", "DEBUG", "10", "NOTSET", "0"], help="how verbose")
+	parser.add_argument("--log_level", default="INFO", choices=["CRITICAL", "50", "ERROR", "40", "WARNING", "30", "INFO", "20", "DEBUG", "10", "NOTSET", "0"], help="how verbose")
+	parser.add_argument("--gen_changelog", default=None, type=parse_changelog, help="generate a changelog")
+	parser.add_argument("--urgency", default="medium", help="urgency of this update")
+
 	args = parser.parse_args()
 
 	if args.app_location.endswith(os.sep): args.app_location = args.app_location[:-1]
@@ -137,7 +167,6 @@ if __name__ == "__main__":
 	architecture = config["architecture"]
 
 	try:
-		# Make structure
 		LOGGER.debug("Making deb file structure")
 		dirname = "{}_{}".format(config["package"], config["version"])
 		original_files = os.listdir() + [dirname + "_" + architecture + ".deb"]
@@ -146,6 +175,8 @@ if __name__ == "__main__":
 		LOGGER.debug("Working in temp folder")
 		destination = join_path(os.sep, "tmp", dirname)
 		os.environ["DEST"] = join_path(destination, "data")
+
+		# Make structure
 		pathlib.Path(destination, "control").mkdir(parents=True)
 		pathlib.Path(destination, "data").mkdir(parents=True)
 		os.chdir(destination)
@@ -156,6 +187,26 @@ if __name__ == "__main__":
 			if os.path.isfile(script_file):
 				LOGGER.debug("Adding {}".format(script_name))
 				copy(script_file, "control", verbose=verbose)
+
+		# Add changelog
+		if args.gen_changelog is not None:
+			if args.gen_changelog[0] == "commit_id":
+				commit_messages = get_commit_messages(args.gen_changelog[1])
+				if len(commit_messages) == 0:
+					# Use "auto"
+					pass
+				changes_string = "\n".join(["* {} ({})".format(m[1], m[0]) for m in commit_messages])
+			else:
+				raise NotImplementedError
+
+			LOGGER.debug("Constructing and writing changelog")
+			pathlib.Path("data", "usr", "share", "doc", config["package"]).mkdir(parents=True)
+			changelog_title_string = "{} ({}) any; urgency={}".format(config["package"], config["version"], args.urgency)
+			changelog_changes_string = "\n".join(["  " + l for l in changes_string.split("\n")])
+			changelog_author_string = " -- {}  {}".format(config["maintainer"], datetime.datetime.strftime(pytz.timezone("EST").localize(datetime.datetime.now()), "%a, %d %b %Y %X %z"))
+			changelog_string = "\n\n".join([changelog_title_string, changelog_changes_string, changelog_author_string])
+			LOGGER.info("Changes:\n{}".format(changes_string))
+			with open(join_path("data", "usr", "share", "doc", config["package"], "changelog.Debian"), "w") as f: f.write(changelog_string)
 
 		# Build
 		if os.path.isfile(build_script):
