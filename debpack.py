@@ -109,11 +109,6 @@ if __name__ == "__main__":
 	verbose = LOGGER.level > logging.INFO
 
 	CONFIG_KEYS = {
-		"package" : {
-			"default" : os.environ["SRC"].split(os.sep)[-1],
-			"validation" : None,
-			"transform" : str.strip
-		},
 		"section" : {
 			"default" : None,
 			"validation" : lambda x: x in ["admin", "cli-mono", "comm", "database", "debug", "devel", "doc", "editors", "education", "electronics", "embedded", "fonts", "games", "gnome", "gnu-r", "gnustep", "graphics", "hamradio", "haskell", "httpd", "interpreters", "introspection", "java", "javascript", "kde", "kernel", "libdevel", "libs", "lisp", "localization", "mail", "math", "metapackages", "misc", "net", "news", "ocaml", "oldlibs", "otherosfs", "perl", "php", "python", "ruby", "rust", "science", "shells", "sound", "tasks", "tex", "text", "utils", "vcs", "video", "web", "x11", "xfce", "zope"],
@@ -167,6 +162,7 @@ if __name__ == "__main__":
 		LOGGER.debug("Using architecture {}".format(config["architecture"]))
 	else:
 		config["architecture"] = "all"
+	config["package"] = os.environ["SRC"].split(os.sep)[-1]
 
 	# Ser extra vars
 	build_script = join_path(os.environ["SRC"], ".debpack", "build")
