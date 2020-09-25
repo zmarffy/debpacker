@@ -233,7 +233,7 @@ if __name__ == "__main__":
 
 		# Write control file
 		s = ""
-		for k in list(CONFIG_KEYS.keys()) + ["version", "installed-size", "architecture"]:
+		for k in list(CONFIG_KEYS.keys()) + ["package", "version", "installed-size", "architecture"]:
 			v = config[k]
 			if isinstance(v, list):
 				v = ", ".join(v)
