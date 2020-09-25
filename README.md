@@ -63,7 +63,7 @@ These are the `apt` control scripts that run under certain conditions. See [here
 
 ### Packing
 
-Switch to the root director of the source code and run `debpack [app version]`. It's as simple as that. Run `debpack --help` for more options.
+Switch to the root directory of the source code and run `debpack [app version]`. It's as simple as that. Run `debpack --help` for more options.
 
 ## Code changes that need to be made
 
