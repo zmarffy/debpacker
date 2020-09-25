@@ -15,13 +15,15 @@
 
 ## Setup
 
-Install the deb package, which was, fun fact, created by `debpack` itself
+Install the DEB package, which was, fun fact, created by `debpack` itself
 
 ## Creating your first DEB file with debpacker
 
+Creating a DEB package with this tool is as simple as creating a configurayion file with where the files are to be installed, creating a build script, and running a command when read to pack.
+
 ### Structure
 
-When working on an application, a folder should be placed in the root of the source code called `debpack`. The structure of this folder is as shown.
+When working on an application, a folder should be placed in the root of the source code called `.debpack`. The structure of this folder is as shown.
 
 ```
 source_code_folder/
@@ -58,6 +60,10 @@ Why do I use this? Because I never learned `make`! Yay, reinventing the wheel!
 #### The `maintainer-scripts`
 
 These are the `apt` control scripts that run under certain conditions. See [here](https://www.debian.org/doc/manuals/maint-guide/dreq.en.html) for more info.
+
+### Packing
+
+Switch to the root director of the source code and run `debpack [app version]`. It's as simple as that. Run `debpack --help` for more options.
 
 ## Code changes that need to be made
 

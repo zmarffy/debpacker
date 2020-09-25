@@ -4,7 +4,7 @@ import argparse
 import json
 import os
 from os.path import join as join_path
-from subprocess import check_output, check_call, CalledProcessError
+from subprocess import check_output, check_call, CalledProcessError, PIPE
 import re
 import datetime
 import pytz
@@ -46,7 +46,11 @@ def transform_maintainer(maint):
 	return "{} <{}>".format(maint["name"], maint["email"])
 
 def run_command(command, shell=True):
-	return check_output(command, shell=shell).decode().strip()
+	try:
+		return check_output(command, stderr=PIPE, shell=shell).decode().strip()
+	except CalledProcessError as e:
+		LOGGER.critical(e.stderr.decode().strip())
+		raise e
 
 def copy(src, dest, exclude=[], verbose=False):
 	cmd = ["rsync", "-a", src, dest]
@@ -91,16 +95,15 @@ if __name__ == "__main__":
 
 	parser = argparse.ArgumentParser()
 	parser.add_argument("app_version", help="version to tag deb file with")
-	parser.add_argument("app_location", default=os.getcwd(), nargs="?", type=os.path.abspath, help="location of app to package")
+	parser.add_argument("-a", "--architecture_all", action="store_true", help="if package is not architecture-specifc")
 	parser.add_argument("--dest", default=os.getcwd(), type=os.path.abspath, help="where to output deb file")
 	parser.add_argument("--log_level", default="INFO", choices=["CRITICAL", "50", "ERROR", "40", "WARNING", "30", "INFO", "20", "DEBUG", "10", "NOTSET", "0"], help="how verbose")
-	parser.add_argument("--gen_changelog", default=None, type=parse_changelog, help="generate a changelog")
-	parser.add_argument("--urgency", default="medium", help="urgency of this update")
+	parser.add_argument("-c", "--gen_changelog", default=None, type=parse_changelog, help="generate a changelog")
+	parser.add_argument("--urgency", default="medium", type=str.lower, choices=["low", "medium", "high", "emergency", "critical"], help="urgency of this update")
 
 	args = parser.parse_args()
 
-	if args.app_location.endswith(os.sep): args.app_location = args.app_location[:-1]
-	os.environ["SRC"] = args.app_location
+	os.environ["SRC"] = os.getcwd()
 	logging.basicConfig(format="%(asctime)s %(message)s")
 	LOGGER.setLevel(args.log_level)
 	verbose = LOGGER.level > logging.INFO
@@ -121,11 +124,6 @@ if __name__ == "__main__":
 			"validation" : lambda x: x in ["required", "important", "standard", "optional"],
 			"transform" : str.strip
 		},
-		"architecture" : {
-			"default" : run_command("dpkg --print-architecture"),
-			"validation" : None,
-			"transform" : str.strip
-		},
 		"depends" : {
 			"default" : [],
 			"validation" : None,
@@ -144,7 +142,10 @@ if __name__ == "__main__":
 	}
 
 	# Read config file
-	with open(join_path(os.environ["SRC"], "debpack", "config.json"), "r") as f: config = json.loads(f.read().strip())
+	try:
+		with open(join_path(os.environ["SRC"], ".debpack", "config.json"), "r") as f: config = json.loads(f.read().strip())
+	except FileNotFoundError:
+		raise FileNotFoundError("No debpack configuration file found; are you in the right source folder?") from None
 	LOGGER.debug("Config loaded")
 
 	# Set defaults, transform, and validate
@@ -161,9 +162,14 @@ if __name__ == "__main__":
 
 	# Set remaining keys
 	config["version"] = args.app_version if re.search("-[0-9]$", args.app_version) else args.app_version + "-1"
+	if not args.architecture_all:
+		config["architecture"] = run_command("dpkg --print-architecture")
+		LOGGER.debug("Using architecture {}".format(config["architecture"]))
+	else:
+		config["architecture"] = "all"
 
 	# Ser extra vars
-	build_script = join_path(os.environ["SRC"], "debpack", "build")
+	build_script = join_path(os.environ["SRC"], ".debpack", "build")
 	architecture = config["architecture"]
 
 	try:
@@ -183,7 +189,7 @@ if __name__ == "__main__":
 
 		# Throw in maintainer scripts
 		for script_name in SCRIPTS:
-			script_file = join_path(os.environ["SRC"], "debpack", "maintainer_scripts", script_name)
+			script_file = join_path(os.environ["SRC"], ".debpack", "maintainer_scripts", script_name)
 			if os.path.isfile(script_file):
 				LOGGER.debug("Adding {}".format(script_name))
 				copy(script_file, "control", verbose=verbose)
@@ -222,7 +228,7 @@ if __name__ == "__main__":
 			dest_is_folder = dest.endswith(os.sep)
 			folders = dest if dest_is_folder else os.sep.join(dest.split(os.sep)[:-1])
 			run_command(["mkdir", "-p", folders], shell=False)
-			copy(join_path(os.environ["SRC"], src), join_path(dest), exclude=["debpack", ".git", ".gitignore"], verbose=verbose)
+			copy(join_path(os.environ["SRC"], src), join_path(dest), exclude=[".debpack", ".git", ".gitignore"], verbose=verbose)
 		# Get another value that can't be determined until after build
 		config["installed-size"] = ceil(int(run_command("du -s -B1 data | cut -f -1")) / 1024)
 
@@ -231,7 +237,7 @@ if __name__ == "__main__":
 
 		# Write control file
 		s = ""
-		for k in list(CONFIG_KEYS.keys()) + ["version", "installed-size"]:
+		for k in list(CONFIG_KEYS.keys()) + ["version", "installed-size", "architecture"]:
 			v = config[k]
 			if isinstance(v, list):
 				v = ", ".join(v)
@@ -256,11 +262,10 @@ if __name__ == "__main__":
 		# Clean up
 		LOGGER.debug("Cleaning up temp folder")
 		try:
-			pass
 			rm(destination)
 		except CalledProcessError:
 			LOGGER.debug("Could not delete {}".format(dirname))
-		os.chdir(args.app_location)
+		os.chdir(os.environ["SRC"])
 		LOGGER.debug("Working in source folder")
 		LOGGER.debug("Cleaning up source folder")
 		for f in [f for f in os.listdir() if f not in original_files]: rm(join_path(os.environ["SRC"], f))

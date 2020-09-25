@@ -5,9 +5,9 @@
 		"name" : "Zeke Marffy",
 		"email" : "zmarffy@me.com"
 	},
-	"architecture" : "all",
 	"depends" : [
-		"python3"
+		"python3",
+		"pigz"
 	],
 	"description" : "pack a deb file from a project",
 	"build" : {
