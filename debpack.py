@@ -4,13 +4,18 @@ import argparse
 import json
 import os
 from os.path import join as join_path
+from os.path import expanduser
 from subprocess import check_output, check_call, CalledProcessError, PIPE
 import re
 import datetime
 import pytz
+from tzlocal import get_localzone
 from math import ceil
 import pathlib
 import logging
+import sys
+
+pathlib.Path(expanduser("~"), ".debpacker").mkdir(exist_ok=True)
 
 LOGGER = logging.getLogger()
 
@@ -32,11 +37,15 @@ SCRIPTS = [
 ]
 
 
+os.environ["SRC"] = os.getcwd()
+PACKAGE_NAME = os.environ["SRC"].split(os.sep)[-1]
+
+
 def capitalize_each_word(s, delimiter):
     return delimiter.join([w.capitalize() for w in s.split(delimiter)])
 
 
-def transform_description(desc):
+def _transform_description(desc):
     new_desc = ""
     for i, line in enumerate(desc.split("\n")):
         line = "." if line == "" else line.strip()
@@ -46,7 +55,7 @@ def transform_description(desc):
     return new_desc.strip()
 
 
-def transform_maintainer(maint):
+def _transform_maintainer(maint):
     return "{} <{}>".format(maint["name"], maint["email"])
 
 
@@ -78,27 +87,75 @@ def rm(src):
     return run_command(["rm", "-r", src], shell=False)
 
 
-def get_commit_messages(last_commit_id_to_include):
-    out = run_command(["git", "-C", os.environ["SRC"],
-                       "reflog", "--no-color"], shell=False)
+def get_commit_messages(last_commit_id_to_include=None):
+    remove_one_commit = last_commit_id_to_include is None
+    use_all_commits = False
+    commit_id_found = False
+    if last_commit_id_to_include is None:
+        try:
+            with open(join_path(expanduser("~"), ".debpacker", PACKAGE_NAME, ".lci"), "r") as f:
+                last_commit_id_to_include = f.read().strip()
+        except FileNotFoundError:
+            use_all_commits = True
+
+    out = run_command(["git", "-C", os.environ["SRC"], "--no-pager", "log",
+                       "--reflog", "--no-color", "--pretty=format:%H,%s"], shell=False)
     commits = []
     for commit in out.split("\n"):
-        data = commit.split("commit: ", 1)
-        if len(data) != 2:
-            continue
-        commits.append((data[0].split(" ")[0], data[1]))
-        if data[0].startswith(last_commit_id_to_include):
+        data = commit.split(",", 1)
+        commits.append(data)
+        if not use_all_commits and last_commit_id_to_include is not None and data[0].startswith(last_commit_id_to_include):
+            commit_id_found = True
             break
+    if not use_all_commits and remove_one_commit:
+        commits = commits[0:-1]
+    if last_commit_id_to_include is not None and not commit_id_found:
+        raise ValueError("Could not find commit {}".format(
+            last_commit_id_to_include))
     return commits
 
 
-def parse_changelog(s):
-    if s is None or s == "":
-        return None
+def _format_changes_string(o):
+    if isinstance(o, str):
+        return "\n".join(["* {}".format(c) for c in o.split("\n")])
+    elif isinstance(o, list):
+        return "\n".join(["* {} ({})".format(m[0], m[1]) for m in o])
     else:
-        option = "message"
-        message = s
-        for o in ["auto", "commit_id", "message"]:
+        raise ValueError("Trying to format an unsupported type")
+
+
+def _get_changes_from_input():
+    changes_string = sys.stdin.read()
+    changes_string = changes_string.strip()
+    if not changes_string.endswith("\n") or not changes_string:
+        print()
+    if not changes_string:
+        LOGGER.debug("No changes provided")
+        changes_string = "Repack of last version"
+    return changes_string
+
+
+def get_last_commit_id_and_generate_changes_string(last_commit_id_to_include=None):
+    last_commit_id = None
+    commit_messages = get_commit_messages(
+        last_commit_id_to_include=last_commit_id_to_include)
+    if len(commit_messages) == 0:
+        print("No new git commits; please enter a changelog:")
+        changes_string = _format_changes_string(_get_changes_from_input())
+    else:
+        last_commit_id = commit_messages[0][0]
+        changes_string = _format_changes_string(commit_messages)
+    return last_commit_id, changes_string
+
+
+def _parse_changelog(s):
+    if s is None or s == "":
+        return None, None
+    elif s == "auto":
+        return "auto", None
+    else:
+        option, message = "message", s # Default
+        for o in ["message", "from_commit_id"]:
             if s.startswith(o + "="):
                 option = o
                 message = s.split("=", 1)[1]
@@ -117,13 +174,12 @@ if __name__ == "__main__":
     parser.add_argument("--log_level", default="INFO", choices=[
                         "CRITICAL", "50", "ERROR", "40", "WARNING", "30", "INFO", "20", "DEBUG", "10", "NOTSET", "0"], help="how verbose")
     parser.add_argument("-c", "--gen_changelog", default=None,
-                        type=parse_changelog, help="generate a changelog")
+                        type=_parse_changelog, nargs="?", const=("message", None), help="generate a changelog") # Need to doc more
     parser.add_argument("--urgency", default="medium", type=str.lower, choices=[
                         "low", "medium", "high", "emergency", "critical"], help="urgency of this update")
 
     args = parser.parse_args()
 
-    os.environ["SRC"] = os.getcwd()
     logging.basicConfig(format="%(asctime)s %(message)s")
     LOGGER.setLevel(args.log_level)
     verbose = LOGGER.level > logging.INFO
@@ -147,12 +203,12 @@ if __name__ == "__main__":
         "maintainer": {
             "default": "{} <{}>".format(run_command("git config user.name"), run_command("git config user.email")),
             "validation": lambda x: bool(re.compile(".+ <.+@.+\..+>").match(x)),
-            "transform": transform_maintainer
+            "transform": _transform_maintainer
         },
         "description": {
             "default": None,
             "validation": None,
-            "transform": transform_description
+            "transform": _transform_description
         }
     }
 
@@ -187,15 +243,20 @@ if __name__ == "__main__":
         LOGGER.debug("Using architecture {}".format(config["architecture"]))
     else:
         config["architecture"] = "all"
-    config["package"] = os.environ["SRC"].split(os.sep)[-1]
+    config["package"] = PACKAGE_NAME
+
+    # Create folder for writing persistent data
+    pathlib.Path(expanduser("~"), ".debpacker",
+                 PACKAGE_NAME).mkdir(exist_ok=True)
 
     # Ser extra vars
     build_script = join_path(os.environ["SRC"], ".debpack", "build")
     architecture = config["architecture"]
+    last_commit_id = None
 
     try:
         LOGGER.debug("Making deb file structure")
-        dirname = "{}_{}".format(config["package"], config["version"])
+        dirname = "{}_{}".format(PACKAGE_NAME, config["version"])
         original_files = os.listdir() + [dirname + "_" + architecture + ".deb"]
 
         # Work in tmp directory
@@ -217,33 +278,39 @@ if __name__ == "__main__":
                 copy(script_file, "control", verbose=verbose)
 
         # Add changelog
-        if args.gen_changelog is not None:
-            if args.gen_changelog[0] == "commit_id":
-                commit_messages = get_commit_messages(args.gen_changelog[1])
-                if len(commit_messages) == 0:
-                    # Use "auto"
-                    pass
-                changes_string = "\n".join(
-                    ["* {} ({})".format(m[1], m[0]) for m in commit_messages])
+        if args.gen_changelog != (None, None):
+            if args.gen_changelog[0] == "from_commit_id":
+                last_commit_id = args.gen_changelog[1]
+                last_commit_id, changes_string = get_last_commit_id_and_generate_changes_string(
+                    last_commit_id_to_include=last_commit_id)
+            elif args.gen_changelog[0] == "auto":
+                last_commit_id, changes_string = get_last_commit_id_and_generate_changes_string()
+            elif args.gen_changelog[0] == "message":
+                changes_string = args.gen_changelog[1]
+                if changes_string is None:
+                    print("Please enter a changelog:")
+                    changes_string = _get_changes_from_input()
+                changes_string = _format_changes_string(changes_string)
             else:
-                raise NotImplementedError
+                raise parser.error("Invalid option for gen_changelog")
 
             LOGGER.debug("Constructing and writing changelog")
             pathlib.Path("data", "usr", "share", "doc",
-                         config["package"]).mkdir(parents=True)
+                         PACKAGE_NAME).mkdir(parents=True)
             changelog_title_string = "{} ({}) any; urgency={}".format(
-                config["package"], config["version"], args.urgency)
+                PACKAGE_NAME, config["version"], args.urgency)
             changelog_changes_string = "\n".join(
                 ["  " + l for l in changes_string.split("\n")])
             changelog_author_string = " -- {}  {}".format(config["maintainer"], datetime.datetime.strftime(
-                pytz.timezone("EST").localize(datetime.datetime.now()), "%a, %d %b %Y %X %z"))
+                pytz.timezone(get_localzone().zone).localize(datetime.datetime.now()), "%a, %d %b %Y %X %z"))
             changelog_string = "\n\n".join(
                 [changelog_title_string, changelog_changes_string, changelog_author_string])
             LOGGER.info("Changes:\n{}".format(changes_string))
-            with open(join_path("data", "usr", "share", "doc", config["package"], "changelog.Debian"), "w") as f:
+            # This is likely tiny so there is no reason to gzip it
+            with open(join_path("data", "usr", "share", "doc", PACKAGE_NAME, "changelog.Debian"), "w") as f:
                 f.write(changelog_string)
 
-        # Build
+        # Build/compile/whatever your code
         if os.path.isfile(build_script):
             os.chdir("data")
             LOGGER.debug("Running build script")
@@ -294,6 +361,10 @@ if __name__ == "__main__":
 
         # Move to final destination
         move(dirname + "_" + architecture + ".deb", args.dest)
+
+        if last_commit_id is not None:
+            with open(join_path(expanduser("~"), ".debpacker", PACKAGE_NAME, ".lci"), "w") as f:
+                f.write(last_commit_id)
 
     finally:
         # Clean up
