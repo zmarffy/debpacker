@@ -119,7 +119,7 @@ def _format_changes_string(o):
     if isinstance(o, str):
         return "\n".join(["* {}".format(c) for c in o.split("\n")])
     elif isinstance(o, list):
-        return "\n".join(["* {} ({})".format(m[0], m[1]) for m in o])
+        return "\n".join(["* {} ({})".format(m[1], m[0]) for m in o])
     else:
         raise ValueError("Trying to format an unsupported type")
 
