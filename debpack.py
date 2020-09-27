@@ -186,7 +186,7 @@ if __name__ == "__main__":
     parser.add_argument("--log_level", default="INFO", type=str.upper,
                         choices=["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"], help="how verbose")
     parser.add_argument("-c", "--gen_changelog", default=None,
-                        type=_parse_changelog, nargs="?", const=("message", None), help="generate a changelog (message=\"new stuff here\" : uses this message; last_commit_id=somecommitid : auto-generates a changelog since the specified commit; auto : auto-generates a changelog since the last time debpack was run)")
+                        type=_parse_changelog, nargs="?", const=("message", None), help="generate a changelog (message=\"new stuff here\" : uses this message; from_commit_id=somecommitid : auto-generates a changelog since the specified commit; auto : auto-generates a changelog since the last time debpack was run)")
     parser.add_argument("--urgency", default="medium", type=str.lower, choices=[
                         "low", "medium", "high", "emergency", "critical"], help="urgency of this update")
     parser.add_argument("--github_release", action="store_true", help="upload the resulting DEB to GitHub's Releases")
