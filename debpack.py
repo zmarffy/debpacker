@@ -14,8 +14,12 @@ from math import ceil
 import pathlib
 import logging
 import sys
+from getch import getche
 
+# Make folder for settings
 pathlib.Path(expanduser("~"), ".debpacker").mkdir(exist_ok=True)
+
+GIT_FEATURES_AVAILABLE = os.path.isdir(".git")
 
 LOGGER = logging.getLogger()
 
@@ -45,6 +49,13 @@ def capitalize_each_word(s, delimiter):
     return delimiter.join([w.capitalize() for w in s.split(delimiter)])
 
 
+def y_to_continue(prompt="Enter y to continue:"):
+    print(prompt + " (y/n): ", end="", flush=True)
+    y = getche().lower() == "y"
+    print()
+    return y
+
+
 def _transform_description(desc):
     new_desc = ""
     for i, line in enumerate(desc.split("\n")):
@@ -54,6 +65,12 @@ def _transform_description(desc):
             line = " " + line
     return new_desc.strip()
 
+
+def _transform_architecture(arch_all):
+    if arch_all:
+        return "all"
+    else:
+        return run_command("dpkg --print-architecture")
 
 def _transform_maintainer(maint):
     return "{} <{}>".format(maint["name"], maint["email"])
@@ -67,15 +84,14 @@ def run_command(command, shell=True):
         raise e
 
 
-def copy(src, dest, exclude=[], verbose=False):
+def copy(src, dest, exclude=[], verbose=True):
     cmd = ["rsync", "-a", src, dest]
     if verbose:
         cmd[1] += "v"
     for e in exclude:
         cmd += ["--exclude", e]
     out = run_command(cmd, shell=False)
-    if verbose:
-        print(out)
+    LOGGER.debug(out)
     return out
 
 
@@ -124,15 +140,15 @@ def _format_changes_string(o):
         raise ValueError("Trying to format an unsupported type")
 
 
-def _get_changes_from_input():
-    changes_string = sys.stdin.read()
-    changes_string = changes_string.strip()
-    if not changes_string.endswith("\n") or not changes_string:
+def input_multiline(warn="", default=""):
+    s = sys.stdin.read()
+    s = s.strip()
+    if not s.endswith("\n") or not s:
         print()
-    if not changes_string:
-        LOGGER.debug("No changes provided")
-        changes_string = "Repack of last version"
-    return changes_string
+    if not s:
+        LOGGER.warning(warn)
+        s = default
+    return s
 
 
 def get_last_commit_id_and_generate_changes_string(last_commit_id_to_include=None):
@@ -141,7 +157,7 @@ def get_last_commit_id_and_generate_changes_string(last_commit_id_to_include=Non
         last_commit_id_to_include=last_commit_id_to_include)
     if len(commit_messages) == 0:
         print("No new git commits; please enter a changelog:")
-        changes_string = _format_changes_string(_get_changes_from_input())
+        changes_string = _format_changes_string(input_multiline(warn="No changes provided", default="Repack of last version"))
     else:
         last_commit_id = commit_messages[0][0]
         changes_string = _format_changes_string(commit_messages)
@@ -167,16 +183,13 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("app_version", help="version to tag deb file with")
-    parser.add_argument("-a", "--architecture_all", action="store_true",
-                        help="if package is not architecture-specifc")
-    parser.add_argument("--dest", default=os.getcwd(),
-                        type=os.path.abspath, help="where to output deb file")
-    parser.add_argument("--log_level", default="INFO", choices=[
-                        "CRITICAL", "50", "ERROR", "40", "WARNING", "30", "INFO", "20", "DEBUG", "10", "NOTSET", "0"], help="how verbose")
+    parser.add_argument("--log_level", default="INFO", type=str.upper,
+                        choices=["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"], help="how verbose")
     parser.add_argument("-c", "--gen_changelog", default=None,
-                        type=_parse_changelog, nargs="?", const=("message", None), help="generate a changelog") # Need to doc more
+                        type=_parse_changelog, nargs="?", const=("message", None), help="generate a changelog (message=\"new stuff here\" : uses this message; last_commit_id=somecommitid : auto-generates a changelog since the specified commit; auto : auto-generates a changelog since the last time debpack was run)")
     parser.add_argument("--urgency", default="medium", type=str.lower, choices=[
                         "low", "medium", "high", "emergency", "critical"], help="urgency of this update")
+    parser.add_argument("--github_release", action="store_true", help="upload the resulting DEB to GitHub's Releases")
 
     args = parser.parse_args()
 
@@ -187,28 +200,33 @@ if __name__ == "__main__":
     CONFIG_KEYS = {
         "section": {
             "default": None,
-            "validation": lambda x: x in ["admin", "cli-mono", "comm", "database", "debug", "devel", "doc", "editors", "education", "electronics", "embedded", "fonts", "games", "gnome", "gnu-r", "gnustep", "graphics", "hamradio", "haskell", "httpd", "interpreters", "introspection", "java", "javascript", "kde", "kernel", "libdevel", "libs", "lisp", "localization", "mail", "math", "metapackages", "misc", "net", "news", "ocaml", "oldlibs", "otherosfs", "perl", "php", "python", "ruby", "rust", "science", "shells", "sound", "tasks", "tex", "text", "utils", "vcs", "video", "web", "x11", "xfce", "zope"],
+            "validation": (lambda x: x in ["admin", "cli-mono", "comm", "database", "debug", "devel", "doc", "editors", "education", "electronics", "embedded", "fonts", "games", "gnome", "gnu-r", "gnustep", "graphics", "hamradio", "haskell", "httpd", "interpreters", "introspection", "java", "javascript", "kde", "kernel", "libdevel", "libs", "lisp", "localization", "mail", "math", "metapackages", "misc", "net", "news", "ocaml", "oldlibs", "otherosfs", "perl", "php", "python", "ruby", "rust", "science", "shells", "sound", "tasks", "tex", "text", "utils", "vcs", "video", "web", "x11", "xfce", "zope"], True),
             "transform": str.strip
         },
         "priority": {
             "default": "optional",
-            "validation": lambda x: x in ["required", "important", "standard", "optional"],
+            "validation": (lambda x: x in ["required", "important", "standard", "optional"], True),
             "transform": str.strip
         },
         "depends": {
             "default": [],
-            "validation": None,
+            "validation": (None, True),
             "transform": lambda x: [d.strip() for d in x]
         },
         "maintainer": {
             "default": "{} <{}>".format(run_command("git config user.name"), run_command("git config user.email")),
-            "validation": lambda x: bool(re.compile(".+ <.+@.+\..+>").match(x)),
+            "validation": (lambda x: bool(re.compile(".+ <.+@.+\..+>").match(x)), True),
             "transform": _transform_maintainer
         },
         "description": {
             "default": None,
-            "validation": None,
+            "validation": (None, True),
             "transform": _transform_description
+        },
+        "architecture_all": {
+            "default": None,
+            "validation": (lambda x: x in [True, False], False),
+            "transform": _transform_architecture
         }
     }
 
@@ -230,19 +248,21 @@ if __name__ == "__main__":
                 config[k] = v
             else:
                 raise ValueError("{} cannot be empty".format(k))
-        config[k] = CONFIG_KEYS[k]["transform"](config[k])
-        if CONFIG_KEYS[k]["validation"] is not None and not CONFIG_KEYS[k]["validation"](config[k]):
+        validate_before_transform = not CONFIG_KEYS[k]["validation"][1]
+        if not validate_before_transform:
+            config[k] = CONFIG_KEYS[k]["transform"](config[k])
+        if CONFIG_KEYS[k]["validation"][0] is not None and not CONFIG_KEYS[k]["validation"][0](config[k]):
             raise ValueError(
                 "{} failed validation (offending value: \"{}\")".format(k, config[k]))
+        if validate_before_transform:
+            config[k] = CONFIG_KEYS[k]["transform"](config[k])
 
     # Set remaining keys
     config["version"] = args.app_version if re.search(
         "-[0-9]$", args.app_version) else args.app_version + "-1"
-    if not args.architecture_all:
-        config["architecture"] = run_command("dpkg --print-architecture")
-        LOGGER.debug("Using architecture {}".format(config["architecture"]))
-    else:
-        config["architecture"] = "all"
+    config["architecture"] = config["architecture_all"]
+    del config["architecture_all"]
+    del CONFIG_KEYS["architecture_all"]
     config["package"] = PACKAGE_NAME
 
     # Create folder for writing persistent data
@@ -278,18 +298,22 @@ if __name__ == "__main__":
                 copy(script_file, "control", verbose=verbose)
 
         # Add changelog
-        if args.gen_changelog != (None, None):
+        if args.gen_changelog != (None, None) and args.gen_changelog is not None:
             if args.gen_changelog[0] == "from_commit_id":
+                if not GIT_FEATURES_AVAILABLE:
+                    raise ValueError("git features not available as a .git folder does not exist in this directory")
                 last_commit_id = args.gen_changelog[1]
                 last_commit_id, changes_string = get_last_commit_id_and_generate_changes_string(
                     last_commit_id_to_include=last_commit_id)
             elif args.gen_changelog[0] == "auto":
+                if not GIT_FEATURES_AVAILABLE:
+                    raise ValueError("git features not available as a .git folder does not exist in this directory")
                 last_commit_id, changes_string = get_last_commit_id_and_generate_changes_string()
             elif args.gen_changelog[0] == "message":
                 changes_string = args.gen_changelog[1]
                 if changes_string is None:
                     print("Please enter a changelog:")
-                    changes_string = _get_changes_from_input()
+                    changes_string = input_multiline(warn="No changes provided", default="Repack of last version")
                 changes_string = _format_changes_string(changes_string)
             else:
                 raise parser.error("Invalid option for gen_changelog")
@@ -325,8 +349,8 @@ if __name__ == "__main__":
             dest_is_folder = dest.endswith(os.sep)
             folders = dest if dest_is_folder else os.sep.join(
                 dest.split(os.sep)[:-1])
-            run_command(["mkdir", "-p", folders], shell=False)
-            copy(join_path(os.environ["SRC"], src), join_path(dest), exclude=[
+            pathlib.Path(folders).mkdir(exist_ok=True)
+            copy(join_path(os.environ["SRC"], src), dest, exclude=[
                  ".debpack", ".git", ".gitignore"], verbose=verbose)
         # Get another value that can't be determined until after build
         config["installed-size"] = ceil(
@@ -360,21 +384,36 @@ if __name__ == "__main__":
                      "debian-binary", "control.tar.gz", "data.tar.gz"], shell=False)
 
         # Move to final destination
-        move(dirname + "_" + architecture + ".deb", args.dest)
+        move(dirname + "_" + architecture + ".deb", os.environ["SRC"])
 
+        # Switch to source directory again
+        os.chdir(os.environ["SRC"])
+        LOGGER.debug("Working in source folder")
+
+        LOGGER.info("Created package {}".format(join_path(os.environ["SRC"], dirname + "_" + architecture + ".deb")))
+
+        # Upload to GitHub Releases
+        if args.github_release:
+            if args.gen_changelog != (None, None) and args.gen_changelog is not None and y_to_continue(prompt="Use generated changelog as release notes?"):
+                notes = changes_string
+            else:
+                print("Input notes:")
+                notes = input_multiline(warn="No notes provided", default="")
+            out = run_command(["gh", "release", "create", "-d", "v{}".format(args.app_version), "-t", "v{}".format(args.app_version), "--notes", notes, join_path(dirname + "_" + architecture + ".deb")], shell=False)
+            LOGGER.info("Successfully uploaded to GitHub Releases at {}".format(out))
+
+    finally:
+        # Write .lci file
         if last_commit_id is not None:
             with open(join_path(expanduser("~"), ".debpacker", PACKAGE_NAME, ".lci"), "w") as f:
                 f.write(last_commit_id)
-
-    finally:
         # Clean up
         LOGGER.debug("Cleaning up temp folder")
         try:
             rm(destination)
         except CalledProcessError:
-            LOGGER.debug("Could not delete {}".format(dirname))
-        os.chdir(os.environ["SRC"])
-        LOGGER.debug("Working in source folder")
+            LOGGER.debug("Could not delete {}".format(destination))
         LOGGER.debug("Cleaning up source folder")
         for f in [f for f in os.listdir() if f not in original_files]:
             rm(join_path(os.environ["SRC"], f))
+        os.chdir(os.environ["SRC"]) # Because if you don't do this, some crash reporter helper thing fails
