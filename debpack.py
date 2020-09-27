@@ -399,7 +399,7 @@ if __name__ == "__main__":
             else:
                 print("Input notes:")
                 notes = input_multiline(warn="No notes provided", default="")
-            out = run_command(["gh", "release", "create", "-d", "v{}".format(args.app_version), "-t", "v{}".format(args.app_version), "--notes", notes, join_path(dirname + "_" + architecture + ".deb")], shell=False)
+            out = run_command(["gh", "release", "create", "v{}".format(args.app_version), "-t", "v{}".format(args.app_version), "--notes", notes, join_path(dirname + "_" + architecture + ".deb")], shell=False)
             LOGGER.info("Successfully uploaded to GitHub Releases at {}".format(out))
 
     finally:
