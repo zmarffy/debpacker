@@ -72,6 +72,7 @@ def _transform_architecture(arch_all):
     else:
         return run_command("dpkg --print-architecture")
 
+
 def _transform_maintainer(maint):
     return "{} <{}>".format(maint["name"], maint["email"])
 
@@ -157,7 +158,8 @@ def get_last_commit_id_and_generate_changes_string(last_commit_id_to_include=Non
         last_commit_id_to_include=last_commit_id_to_include)
     if len(commit_messages) == 0:
         print("No new git commits; please enter a changelog:")
-        changes_string = _format_changes_string(input_multiline(warn="No changes provided", default="Repack of last version"))
+        changes_string = _format_changes_string(input_multiline(
+            warn="No changes provided", default="Repack of last version"))
     else:
         last_commit_id = commit_messages[0][0]
         changes_string = _format_changes_string(commit_messages)
@@ -170,7 +172,7 @@ def _parse_changelog(s):
     elif s == "auto":
         return "auto", None
     else:
-        option, message = "message", s # Default
+        option, message = "message", s  # Default
         for o in ["message", "from_commit_id"]:
             if s.startswith(o + "="):
                 option = o
@@ -189,7 +191,8 @@ if __name__ == "__main__":
                         type=_parse_changelog, nargs="?", const=("message", None), help="generate a changelog (message=\"new stuff here\" : uses this message; from_commit_id=somecommitid : auto-generates a changelog since the specified commit; auto : auto-generates a changelog since the last time debpack was run)")
     parser.add_argument("--urgency", default="medium", type=str.lower, choices=[
                         "low", "medium", "high", "emergency", "critical"], help="urgency of this update")
-    parser.add_argument("--github_release", action="store_true", help="upload the resulting DEB to GitHub's Releases")
+    parser.add_argument("--github_release", action="store_true",
+                        help="upload the resulting DEB to GitHub's Releases")
 
     args = parser.parse_args()
 
@@ -301,19 +304,22 @@ if __name__ == "__main__":
         if args.gen_changelog != (None, None) and args.gen_changelog is not None:
             if args.gen_changelog[0] == "from_commit_id":
                 if not GIT_FEATURES_AVAILABLE:
-                    raise ValueError("git features not available as a .git folder does not exist in this directory")
+                    raise ValueError(
+                        "git features not available as a .git folder does not exist in this directory")
                 last_commit_id = args.gen_changelog[1]
                 last_commit_id, changes_string = get_last_commit_id_and_generate_changes_string(
                     last_commit_id_to_include=last_commit_id)
             elif args.gen_changelog[0] == "auto":
                 if not GIT_FEATURES_AVAILABLE:
-                    raise ValueError("git features not available as a .git folder does not exist in this directory")
+                    raise ValueError(
+                        "git features not available as a .git folder does not exist in this directory")
                 last_commit_id, changes_string = get_last_commit_id_and_generate_changes_string()
             elif args.gen_changelog[0] == "message":
                 changes_string = args.gen_changelog[1]
                 if changes_string is None:
                     print("Please enter a changelog:")
-                    changes_string = input_multiline(warn="No changes provided", default="Repack of last version")
+                    changes_string = input_multiline(
+                        warn="No changes provided", default="Repack of last version")
                 changes_string = _format_changes_string(changes_string)
             else:
                 raise parser.error("Invalid option for gen_changelog")
@@ -390,7 +396,8 @@ if __name__ == "__main__":
         os.chdir(os.environ["SRC"])
         LOGGER.debug("Working in source folder")
 
-        LOGGER.info("Created package {}".format(join_path(os.environ["SRC"], dirname + "_" + architecture + ".deb")))
+        LOGGER.info("Created package {}".format(
+            join_path(os.environ["SRC"], dirname + "_" + architecture + ".deb")))
 
         # Upload to GitHub Releases
         if args.github_release:
@@ -399,8 +406,10 @@ if __name__ == "__main__":
             else:
                 print("Input notes:")
                 notes = input_multiline(warn="No notes provided", default="")
-            out = run_command(["gh", "release", "create", "v{}".format(args.app_version), "-t", "v{}".format(args.app_version), "--notes", notes, join_path(dirname + "_" + architecture + ".deb")], shell=False)
-            LOGGER.info("Successfully uploaded to GitHub Releases at {}".format(out))
+            out = run_command(["gh", "release", "create", "v{}".format(args.app_version), "-t", "v{}".format(
+                args.app_version), "--notes", notes, join_path(dirname + "_" + architecture + ".deb")], shell=False)
+            LOGGER.info(
+                "Successfully uploaded to GitHub Releases at {}".format(out))
 
     finally:
         # Write .lci file
@@ -416,4 +425,5 @@ if __name__ == "__main__":
         LOGGER.debug("Cleaning up source folder")
         for f in [f for f in os.listdir() if f not in original_files]:
             rm(join_path(os.environ["SRC"], f))
-        os.chdir(os.environ["SRC"]) # Because if you don't do this, some crash reporter helper thing fails
+        # Because if you don't do this, some crash reporter helper thing fails
+        os.chdir(os.environ["SRC"])
