@@ -13,12 +13,13 @@
 * `python3`
 * `pigz`
 * `pytz` (a `pip` package)
-* `getch` (a `pip` package)
+* `tzlocal` (a `pip` package)
+* `zmtools` (a `pip` package)
 * `gh` (the GitHub CLI)
 
 ## Creating your first DEB file with debpacker
 
-Creating a DEB package with this tool is as simple as creating a configurayion file with where the files are to be installed, creating a build script, and running a command when read to pack.
+Creating a DEB package with this tool is as simple as creating a configuration file with where the files are to be installed, creating a build script, and running a command when read to pack.
 
 ### Structure
 
@@ -95,7 +96,3 @@ Switch to the root directory of the source code and run `debpack [app version]`.
 * Automatically pack README files and assign them to another command?
 * Automatic setup of a local/real APT repository to drop packages into
 * bumpversion integraton
-
-## Debugging tips
-
-* Run with `--log_level DEBUG`
