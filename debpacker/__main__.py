@@ -408,3 +408,8 @@ def main():
             _rm(join_path(os.environ["SRC"], f))
         # Because if you don't do this, some crash reporter helper thing fails
         os.chdir(os.environ["SRC"])
+
+    return 0
+
+if __name__ == "__main__":
+    sys.exit(main())
