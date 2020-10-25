@@ -1,20 +1,21 @@
-#! /usr/bin/env python3
+# TODO: Docstrings.
 
 import argparse
-import json
-import os
-from os.path import join as join_path
-from os.path import expanduser
-from subprocess import check_output, check_call, CalledProcessError, PIPE
-import re
 import datetime
+import json
+import logging
+import os
+import pathlib
+import re
+import sys
+from math import ceil
+from os.path import expanduser
+from os.path import join as join_path
+from subprocess import PIPE, CalledProcessError, check_call, check_output
+
 import pytz
 from tzlocal import get_localzone
-from math import ceil
-import pathlib
-import logging
-import sys
-from getch import getche
+from zmtools import capitalize_each_word, input_multiline, init_logging, y_to_continue
 
 # Make folder for settings
 pathlib.Path(expanduser("~"), ".debpacker").mkdir(exist_ok=True)
@@ -45,17 +46,6 @@ os.environ["SRC"] = os.getcwd()
 PACKAGE_NAME = os.environ["SRC"].split(os.sep)[-1]
 
 
-def capitalize_each_word(s, delimiter):
-    return delimiter.join([w.capitalize() for w in s.split(delimiter)])
-
-
-def y_to_continue(prompt="Enter y to continue:"):
-    print(prompt + " (y/n): ", end="", flush=True)
-    y = getche().lower() == "y"
-    print()
-    return y
-
-
 def _transform_description(desc):
     new_desc = ""
     for i, line in enumerate(desc.split("\n")):
@@ -70,66 +60,11 @@ def _transform_architecture(arch_all):
     if arch_all:
         return "all"
     else:
-        return run_command("dpkg --print-architecture")
+        return _run_command("dpkg --print-architecture")
 
 
 def _transform_maintainer(maint):
     return "{} <{}>".format(maint["name"], maint["email"])
-
-
-def run_command(command, shell=True):
-    try:
-        return check_output(command, stderr=PIPE, shell=shell).decode().strip()
-    except CalledProcessError as e:
-        LOGGER.critical(e.stderr.decode().strip())
-        raise e
-
-
-def copy(src, dest, exclude=[], verbose=True):
-    cmd = ["rsync", "-a", src, dest]
-    if verbose:
-        cmd[1] += "v"
-    for e in exclude:
-        cmd += ["--exclude", e]
-    out = run_command(cmd, shell=False)
-    LOGGER.debug(out)
-    return out
-
-
-def move(src, dest):
-    return run_command(["mv", src, dest], shell=False)
-
-
-def rm(src):
-    return run_command(["rm", "-r", src], shell=False)
-
-
-def get_commit_messages(last_commit_id_to_include=None):
-    remove_one_commit = last_commit_id_to_include is None
-    use_all_commits = False
-    commit_id_found = False
-    if last_commit_id_to_include is None:
-        try:
-            with open(join_path(expanduser("~"), ".debpacker", PACKAGE_NAME, ".lci"), "r") as f:
-                last_commit_id_to_include = f.read().strip()
-        except FileNotFoundError:
-            use_all_commits = True
-
-    out = run_command(["git", "-C", os.environ["SRC"], "--no-pager", "log",
-                       "--reflog", "--no-color", "--pretty=format:%H,%s"], shell=False)
-    commits = []
-    for commit in out.split("\n"):
-        data = commit.split(",", 1)
-        commits.append(data)
-        if not use_all_commits and last_commit_id_to_include is not None and data[0].startswith(last_commit_id_to_include):
-            commit_id_found = True
-            break
-    if not use_all_commits and remove_one_commit:
-        commits = commits[0:-1]
-    if last_commit_id_to_include is not None and not commit_id_found:
-        raise ValueError("Could not find commit {}".format(
-            last_commit_id_to_include))
-    return commits
 
 
 def _format_changes_string(o):
@@ -139,31 +74,6 @@ def _format_changes_string(o):
         return "\n".join(["* {} ({})".format(m[1], m[0]) for m in o])
     else:
         raise ValueError("Trying to format an unsupported type")
-
-
-def input_multiline(warn="", default=""):
-    s = sys.stdin.read()
-    s = s.strip()
-    if not s.endswith("\n") or not s:
-        print()
-    if not s:
-        LOGGER.warning(warn)
-        s = default
-    return s
-
-
-def get_last_commit_id_and_generate_changes_string(last_commit_id_to_include=None):
-    last_commit_id = None
-    commit_messages = get_commit_messages(
-        last_commit_id_to_include=last_commit_id_to_include)
-    if len(commit_messages) == 0:
-        print("No new git commits; please enter a changelog:")
-        changes_string = _format_changes_string(input_multiline(
-            warn="No changes provided", default="Repack of last version"))
-    else:
-        last_commit_id = commit_messages[0][0]
-        changes_string = _format_changes_string(commit_messages)
-    return last_commit_id, changes_string
 
 
 def _parse_changelog(s):
@@ -181,10 +91,79 @@ def _parse_changelog(s):
         return option, message
 
 
-if __name__ == "__main__":
+def _run_command(command, shell=True):
+    try:
+        return check_output(command, stderr=PIPE, shell=shell).decode().strip()
+    except CalledProcessError as e:
+        LOGGER.critical(e.stderr.decode().strip())
+        raise e
+
+
+def _copy(src, dest, exclude=[], verbose=True):
+    cmd = ["rsync", "-a", src, dest]
+    if verbose:
+        cmd[1] += "v"
+    for e in exclude:
+        cmd += ["--exclude", e]
+    out = _run_command(cmd, shell=False)
+    LOGGER.debug(out)
+    return out
+
+
+def _move(src, dest):
+    return _run_command(["mv", src, dest], shell=False)
+
+
+def _rm(src):
+    return _run_command(["rm", "-r", src], shell=False)
+
+
+def _get_commit_messages(last_commit_id_to_include=None):
+    remove_one_commit = last_commit_id_to_include is None
+    use_all_commits = False
+    commit_id_found = False
+    if last_commit_id_to_include is None:
+        try:
+            with open(join_path(expanduser("~"), ".debpacker", PACKAGE_NAME, ".lci"), "r") as f:
+                last_commit_id_to_include = f.read().strip()
+        except FileNotFoundError:
+            use_all_commits = True
+
+    out = _run_command(["git", "-C", os.environ["SRC"], "--no-pager", "log",
+                       "--reflog", "--no-color", "--pretty=format:%H,%s"], shell=False)
+    commits = []
+    for commit in out.split("\n"):
+        data = commit.split(",", 1)
+        commits.append(data)
+        if not use_all_commits and last_commit_id_to_include is not None and data[0].startswith(last_commit_id_to_include):
+            commit_id_found = True
+            break
+    if not use_all_commits and remove_one_commit:
+        commits = commits[0:-1]
+    if last_commit_id_to_include is not None and not commit_id_found:
+        raise ValueError("Could not find commit {}".format(
+            last_commit_id_to_include))
+    return commits
+
+
+def _get_last_commit_id_and_generate_changes_string(last_commit_id_to_include=None):
+    last_commit_id = None
+    commit_messages = _get_commit_messages(
+        last_commit_id_to_include=last_commit_id_to_include)
+    if len(commit_messages) == 0:
+        print("No new git commits; please enter a changelog:")
+        changes_string = _format_changes_string(input_multiline(
+            warn="No changes provided", default="Repack of last version"))
+    else:
+        last_commit_id = commit_messages[0][0]
+        changes_string = _format_changes_string(commit_messages)
+    return last_commit_id, changes_string
+
+
+def main():
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("app_version", help="version to tag deb file with")
+    parser.add_argument("app_version", help="version to tag DEB file with")
     parser.add_argument("--log_level", default="INFO", type=str.upper,
                         choices=["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"], help="how verbose")
     parser.add_argument("-c", "--gen_changelog", default=None,
@@ -192,13 +171,13 @@ if __name__ == "__main__":
     parser.add_argument("--urgency", default="medium", type=str.lower, choices=[
                         "low", "medium", "high", "emergency", "critical"], help="urgency of this update")
     parser.add_argument("--github_release", action="store_true",
-                        help="upload the resulting DEB to GitHub's Releases")
+                        help="upload the resulting DEB to GitHub Releases")
 
     args = parser.parse_args()
 
-    logging.basicConfig(format="%(asctime)s %(message)s")
-    LOGGER.setLevel(args.log_level)
-    verbose = LOGGER.level > logging.INFO
+    log_level = logging.getLevelName(args.log_level)
+    init_logging(log_level)
+    verbose = log_level > logging.INFO
 
     CONFIG_KEYS = {
         "section": {
@@ -217,8 +196,8 @@ if __name__ == "__main__":
             "transform": lambda x: [d.strip() for d in x]
         },
         "maintainer": {
-            "default": "{} <{}>".format(run_command("git config user.name"), run_command("git config user.email")),
-            "validation": (lambda x: bool(re.compile(".+ <.+@.+\..+>").match(x)), True),
+            "default": "{} <{}>".format(_run_command("git config user.name"), _run_command("git config user.email")),
+            "validation": (lambda x: bool(re.compile(r".+ <.+@.+\..+>").match(x)), True),
             "transform": _transform_maintainer
         },
         "description": {
@@ -278,7 +257,7 @@ if __name__ == "__main__":
     last_commit_id = None
 
     try:
-        LOGGER.debug("Making deb file structure")
+        LOGGER.debug("Making DEB file structure")
         dirname = "{}_{}".format(PACKAGE_NAME, config["version"])
         original_files = os.listdir() + [dirname + "_" + architecture + ".deb"]
 
@@ -298,7 +277,7 @@ if __name__ == "__main__":
                 os.environ["SRC"], ".debpack", "maintainer_scripts", script_name)
             if os.path.isfile(script_file):
                 LOGGER.debug("Adding {}".format(script_name))
-                copy(script_file, "control", verbose=verbose)
+                _copy(script_file, "control", verbose=verbose)
 
         # Add changelog
         if args.gen_changelog != (None, None) and args.gen_changelog is not None:
@@ -307,13 +286,13 @@ if __name__ == "__main__":
                     raise ValueError(
                         "git features not available as a .git folder does not exist in this directory")
                 last_commit_id = args.gen_changelog[1]
-                last_commit_id, changes_string = get_last_commit_id_and_generate_changes_string(
+                last_commit_id, changes_string = _get_last_commit_id_and_generate_changes_string(
                     last_commit_id_to_include=last_commit_id)
             elif args.gen_changelog[0] == "auto":
                 if not GIT_FEATURES_AVAILABLE:
                     raise ValueError(
                         "git features not available as a .git folder does not exist in this directory")
-                last_commit_id, changes_string = get_last_commit_id_and_generate_changes_string()
+                last_commit_id, changes_string = _get_last_commit_id_and_generate_changes_string()
             elif args.gen_changelog[0] == "message":
                 changes_string = args.gen_changelog[1]
                 if changes_string is None:
@@ -355,12 +334,12 @@ if __name__ == "__main__":
             dest_is_folder = dest.endswith(os.sep)
             folders = dest if dest_is_folder else os.sep.join(
                 dest.split(os.sep)[:-1])
-            pathlib.Path(folders).mkdir(exist_ok=True)
-            copy(join_path(os.environ["SRC"], src), dest, exclude=[
+            pathlib.Path(folders).mkdir(parents=True, exist_ok=True)
+            _copy(join_path(os.environ["SRC"], src), dest, exclude=[
                  ".debpack", ".git", ".gitignore"], verbose=verbose)
         # Get another value that can't be determined until after build
         config["installed-size"] = ceil(
-            int(run_command("du -s -B1 data | cut -f -1")) / 1024)
+            int(_run_command("du -s -B1 data | cut -f -1")) / 1024)
 
         # Write that one extra file
         with open("debian-binary", "w") as f:
@@ -379,18 +358,18 @@ if __name__ == "__main__":
 
         # Here, we will manually tar stuff because dpkg-deb does not use mutliple cores
         LOGGER.debug("Zipping control")
-        run_command(
+        _run_command(
             "tar --use-compress-program=pigz -cf control.tar.gz -C control .")
         LOGGER.debug("Zipping data")
-        run_command("tar --use-compress-program=pigz -cf data.tar.gz -C data .")
+        _run_command("tar --use-compress-program=pigz -cf data.tar.gz -C data .")
         LOGGER.debug("Cleaning all but tarballs in build folder")
-        rm("control")
-        rm("data")
-        run_command(["ar", "r", dirname + "_" + architecture + ".deb",
+        _rm("control")
+        _rm("data")
+        _run_command(["ar", "r", dirname + "_" + architecture + ".deb",
                      "debian-binary", "control.tar.gz", "data.tar.gz"], shell=False)
 
         # Move to final destination
-        move(dirname + "_" + architecture + ".deb", os.environ["SRC"])
+        _move(dirname + "_" + architecture + ".deb", os.environ["SRC"])
 
         # Switch to source directory again
         os.chdir(os.environ["SRC"])
@@ -406,7 +385,7 @@ if __name__ == "__main__":
             else:
                 print("Input notes:")
                 notes = input_multiline(warn="No notes provided", default="")
-            out = run_command(["gh", "release", "create", "v{}".format(args.app_version), "-t", "v{}".format(
+            out = _run_command(["gh", "release", "create", "v{}".format(args.app_version), "-t", "v{}".format(
                 args.app_version), "--notes", notes, join_path(dirname + "_" + architecture + ".deb")], shell=False)
             LOGGER.info(
                 "Successfully uploaded to GitHub Releases at {}".format(out))
@@ -419,11 +398,11 @@ if __name__ == "__main__":
         # Clean up
         LOGGER.debug("Cleaning up temp folder")
         try:
-            rm(destination)
+            _rm(destination)
         except CalledProcessError:
             LOGGER.debug("Could not delete {}".format(destination))
         LOGGER.debug("Cleaning up source folder")
         for f in [f for f in os.listdir() if f not in original_files]:
-            rm(join_path(os.environ["SRC"], f))
+            _rm(join_path(os.environ["SRC"], f))
         # Because if you don't do this, some crash reporter helper thing fails
         os.chdir(os.environ["SRC"])

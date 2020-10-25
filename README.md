@@ -16,10 +16,6 @@
 * `getch` (a `pip` package)
 * `gh` (the GitHub CLI)
 
-## Setup
-
-Install the DEB package, which was, fun fact, created by `debpacker` itself
-
 ## Creating your first DEB file with debpacker
 
 Creating a DEB package with this tool is as simple as creating a configurayion file with where the files are to be installed, creating a build script, and running a command when read to pack.
@@ -98,6 +94,7 @@ Switch to the root directory of the source code and run `debpack [app version]`.
 * Add an attempt to write to the destination location before proceeding to create the entire package just to realize permission denied
 * Automatically pack README files and assign them to another command?
 * Automatic setup of a local/real APT repository to drop packages into
+* bumpversion integraton
 
 ## Debugging tips
 
