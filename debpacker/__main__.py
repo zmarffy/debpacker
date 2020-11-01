@@ -1,6 +1,6 @@
 #! /usr/bin/env python3
 
-# TODO: Docstrings.
+# TODO: Docstrings. Use Python commands to remove files. etc. Remove format in favor of f-strings.
 
 import argparse
 import datetime
@@ -198,7 +198,7 @@ def main():
             "transform": lambda x: [d.strip() for d in x]
         },
         "maintainer": {
-            "default": "{} <{}>".format(_run_command("git config user.name"), _run_command("git config user.email")),
+            "default": {"name": _run_command("git config user.name"), "email": _run_command("git config user.email")},
             "validation": (lambda x: bool(re.compile(r".+ <.+@.+\..+>").match(x)), True),
             "transform": _transform_maintainer
         },
