@@ -89,10 +89,3 @@ These are the `apt` control scripts that run under certain conditions. See [here
 ### Packing
 
 Switch to the root directory of the source code and run `debpack [app version]`. It's as simple as that. Run `debpack --help` for more options.
-
-## Code changes that need to be made
-
-* Add an attempt to write to the destination location before proceeding to create the entire package just to realize permission denied
-* Automatically pack README files and assign them to another command?
-* Automatic setup of a local/real APT repository to drop packages into
-* `bumpversion` integration
