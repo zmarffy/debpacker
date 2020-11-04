@@ -391,6 +391,9 @@ def main():
                 args.app_version), "--notes", notes, join_path(dirname + "_" + architecture + ".deb")], shell=False)
             LOGGER.info(
                 "Successfully uploaded to GitHub Releases at {}".format(out))
+            if GIT_FEATURES_AVAILABLE:
+                _run_command("git fetch --tags -f")
+                LOGGER.debug("Updated git tags from remote")
 
     finally:
         # Write .lci file
