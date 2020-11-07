@@ -1,6 +1,6 @@
 #! /usr/bin/env python3
 
-# TODO: Docstrings. Use Python commands to remove files. etc. Remove format in favor of f-strings.
+# TODO: Docstrings. Use Python commands to remove files. etc.
 
 import argparse
 import datetime
@@ -17,7 +17,8 @@ from subprocess import PIPE, CalledProcessError, check_call, check_output
 
 import pytz
 from tzlocal import get_localzone
-from zmtools import capitalize_each_word, input_multiline, init_logging, y_to_continue
+from zmtools import (capitalize_each_word, init_logging, input_multiline,
+                     y_to_continue)
 
 # Make folder for settings
 pathlib.Path(expanduser("~"), ".debpacker").mkdir(exist_ok=True)
@@ -66,14 +67,14 @@ def _transform_architecture(arch_all):
 
 
 def _transform_maintainer(maint):
-    return "{} <{}>".format(maint["name"], maint["email"])
+    return f"{maint['name']} <{maint['email']}>"
 
 
 def _format_changes_string(o):
     if isinstance(o, str):
-        return "\n".join(["* {}".format(c) for c in o.split("\n")])
+        return "\n".join([f"* {c}" for c in o.split("\n")])
     elif isinstance(o, list):
-        return "\n".join(["* {} ({})".format(m[1], m[0]) for m in o])
+        return "\n".join([f"* {m[1]} ({m[0]})" for m in o])
     else:
         raise ValueError("Trying to format an unsupported type")
 
@@ -132,7 +133,7 @@ def _get_commit_messages(last_commit_id_to_include=None):
             use_all_commits = True
 
     out = _run_command(["git", "-C", os.environ["SRC"], "--no-pager", "log",
-                       "--reflog", "--no-color", "--pretty=format:%H,%s"], shell=False)
+                        "--reflog", "--no-color", "--pretty=format:%H,%s"], shell=False)
     commits = []
     for commit in out.split("\n"):
         data = commit.split(",", 1)
@@ -143,8 +144,7 @@ def _get_commit_messages(last_commit_id_to_include=None):
     if not use_all_commits and remove_one_commit:
         commits = commits[0:-1]
     if last_commit_id_to_include is not None and not commit_id_found:
-        raise ValueError("Could not find commit {}".format(
-            last_commit_id_to_include))
+        raise ValueError(f"Could not find commit {last_commit_id_to_include}")
     return commits
 
 
@@ -228,16 +228,16 @@ def main():
         if k not in config.keys():
             v = CONFIG_KEYS[k]["default"]
             if v is not None:
-                LOGGER.warning("Using default for {} ({})".format(k, v))
+                LOGGER.warning(f"Using default for {k} ({v})")
                 config[k] = v
             else:
-                raise ValueError("{} cannot be empty".format(k))
+                raise ValueError(f"{k} cannot be empty")
         validate_before_transform = not CONFIG_KEYS[k]["validation"][1]
         if not validate_before_transform:
             config[k] = CONFIG_KEYS[k]["transform"](config[k])
         if CONFIG_KEYS[k]["validation"][0] is not None and not CONFIG_KEYS[k]["validation"][0](config[k]):
             raise ValueError(
-                "{} failed validation (offending value: \"{}\")".format(k, config[k]))
+                f"{k} failed validation (offending value: \"{config[k]}\")")
         if validate_before_transform:
             config[k] = CONFIG_KEYS[k]["transform"](config[k])
 
@@ -260,7 +260,7 @@ def main():
 
     try:
         LOGGER.debug("Making DEB file structure")
-        dirname = "{}_{}".format(PACKAGE_NAME, config["version"])
+        dirname = f"{PACKAGE_NAME}_{config['version']}"
         original_files = os.listdir() + [dirname + "_" + architecture + ".deb"]
 
         # Work in tmp directory
@@ -278,7 +278,7 @@ def main():
             script_file = join_path(
                 os.environ["SRC"], ".debpack", "maintainer_scripts", script_name)
             if os.path.isfile(script_file):
-                LOGGER.debug("Adding {}".format(script_name))
+                LOGGER.debug(f"Adding {script_name}")
                 _copy(script_file, "control", verbose=verbose)
 
         # Add changelog
@@ -308,15 +308,13 @@ def main():
             LOGGER.debug("Constructing and writing changelog")
             pathlib.Path("data", "usr", "share", "doc",
                          PACKAGE_NAME).mkdir(parents=True)
-            changelog_title_string = "{} ({}) any; urgency={}".format(
-                PACKAGE_NAME, config["version"], args.urgency)
+            changelog_title_string = f"{PACKAGE_NAME} ({config['version']}) any; urgency={args.urgency}"
             changelog_changes_string = "\n".join(
                 ["  " + l for l in changes_string.split("\n")])
-            changelog_author_string = " -- {}  {}".format(config["maintainer"], datetime.datetime.strftime(
-                pytz.timezone(get_localzone().zone).localize(datetime.datetime.now()), "%a, %d %b %Y %X %z"))
+            changelog_author_string = f" -- {config['maintainer']}  {datetime.datetime.strftime(pytz.timezone(get_localzone().zone).localize(datetime.datetime.now()), '%a, %d %b %Y %X %z')}"
             changelog_string = "\n\n".join(
                 [changelog_title_string, changelog_changes_string, changelog_author_string])
-            LOGGER.info("Changes:\n{}".format(changes_string))
+            LOGGER.info(f"Changes:\n{changes_string}")
             # This is likely tiny so there is no reason to gzip it
             with open(join_path("data", "usr", "share", "doc", PACKAGE_NAME, "changelog.Debian"), "w") as f:
                 f.write(changelog_string)
@@ -338,7 +336,7 @@ def main():
                 dest.split(os.sep)[:-1])
             pathlib.Path(folders).mkdir(parents=True, exist_ok=True)
             _copy(join_path(os.environ["SRC"], src), dest, exclude=[
-                 ".debpack", ".git", ".gitignore"], verbose=verbose)
+                ".debpack", ".git", ".gitignore"], verbose=verbose)
         # Get another value that can't be determined until after build
         config["installed-size"] = ceil(
             int(_run_command("du -s -B1 data | cut -f -1")) / 1024)
@@ -353,8 +351,8 @@ def main():
             v = config[k]
             if isinstance(v, list):
                 v = ", ".join(v)
-            s += "{}: {}\n".format(capitalize_each_word(k, "-"), v)
-        LOGGER.debug("Writing control file with contents:\n{}".format(s))
+            s += f"{capitalize_each_word(k, '-')}: {v}\n"
+        LOGGER.debug(f"Writing control file with contents:\n{s}")
         with open(join_path("control", "control"), "w") as f:
             f.write(s)
 
@@ -363,12 +361,13 @@ def main():
         _run_command(
             "tar --use-compress-program=pigz -cf control.tar.gz -C control .")
         LOGGER.debug("Zipping data")
-        _run_command("tar --use-compress-program=pigz -cf data.tar.gz -C data .")
+        _run_command(
+            "tar --use-compress-program=pigz -cf data.tar.gz -C data .")
         LOGGER.debug("Cleaning all but tarballs in build folder")
         _rm("control")
         _rm("data")
         _run_command(["ar", "r", dirname + "_" + architecture + ".deb",
-                     "debian-binary", "control.tar.gz", "data.tar.gz"], shell=False)
+                      "debian-binary", "control.tar.gz", "data.tar.gz"], shell=False)
 
         # Move to final destination
         _move(dirname + "_" + architecture + ".deb", os.environ["SRC"])
@@ -377,8 +376,7 @@ def main():
         os.chdir(os.environ["SRC"])
         LOGGER.debug("Working in source folder")
 
-        LOGGER.info("Created package {}".format(
-            join_path(os.environ["SRC"], dirname + "_" + architecture + ".deb")))
+        LOGGER.info(f"Created package {join_path(os.environ['SRC'], dirname + '_' + architecture + '.deb')}")
 
         # Upload to GitHub Releases
         if args.github_release:
@@ -387,10 +385,9 @@ def main():
             else:
                 print("Input notes:")
                 notes = input_multiline(warn="No notes provided", default="")
-            out = _run_command(["gh", "release", "create", "v{}".format(args.app_version), "-t", "v{}".format(
-                args.app_version), "--notes", notes, join_path(dirname + "_" + architecture + ".deb")], shell=False)
+            out = _run_command(["gh", "release", "create", f"v{args.app_version}", "-t", f"v{args.app_version}", "--notes", notes, join_path(dirname + "_" + architecture + ".deb")], shell=False)
             LOGGER.info(
-                "Successfully uploaded to GitHub Releases at {}".format(out))
+                f"Successfully uploaded to GitHub Releases at {out}")
             if GIT_FEATURES_AVAILABLE:
                 _run_command("git fetch --tags -f")
                 LOGGER.debug("Updated git tags from remote")
@@ -405,7 +402,7 @@ def main():
         try:
             _rm(destination)
         except CalledProcessError:
-            LOGGER.debug("Could not delete {}".format(destination))
+            LOGGER.debug(f"Could not delete {destination}")
         LOGGER.debug("Cleaning up source folder")
         for f in [f for f in os.listdir() if f not in original_files]:
             _rm(join_path(os.environ["SRC"], f))
@@ -413,6 +410,7 @@ def main():
         os.chdir(os.environ["SRC"])
 
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())
