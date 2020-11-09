@@ -173,4 +173,4 @@ Some thoughts to consider when it comes to packing an entirely Python program.
 * Is it a good idea to list Python dependencies as `apt` dependencies? A lot of system-package-manager-managed Python packages are not up to date, and certainly tons and tons are not even available via any known repos. Maybe you should put the installation of these in a maintainer script.
 * How are you going to perform imports of Python files that are off in different locations? I do have an answer to this one, actually. You can use [`zmtools`](https://github.com/zmarffy/zmtools)'s `get_module` function, which will allow you to specify where the Python module you want to import is.
 
-Please, if you are unsure of how to use this tool, open an issue or (even better), email me. I am happy to assist you in fitting it into your project.
+Please, if you are unsure of how to use this tool, open an issue or (even better) email me. I am happy to assist you in fitting it into your project. So long as I don't get a lot of people asking me. :P
