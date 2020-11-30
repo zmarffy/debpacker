@@ -2,6 +2,10 @@
 
 `debpacker` is a Debian package creation tool. It builds DEB files from source code based off a configuration file and build script.
 
+## Important note
+
+11/29/20: This code is going to be majorly refactored soon in order to be more readable and support many more Debian control fields. That may require some of the validation to be moved out into a seperate repo. Stay tuned; things will become much more managable and flexible.
+
 ## Important features
 
 * Easy integration into even enterprise-level build tools
