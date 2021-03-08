@@ -6,6 +6,8 @@
 
 11/29/20: This code is going to be majorly refactored soon in order to be more readable and support many more Debian control fields. That may require some of the validation to be moved out into a seperate repo. Stay tuned; things will become much more managable and flexible.
 
+3/7/21: This is not my proudest code. It is ugly and I learned a lot since then. I need to majorly, majorly rewrite this. One day.
+
 ## Important features
 
 * Easy integration into even enterprise-level build tools
