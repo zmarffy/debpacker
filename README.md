@@ -8,6 +8,8 @@
 
 3/7/21: This is not my proudest code. It is ugly and I learned a lot since then. I need to majorly, majorly rewrite this. One day.
 
+4/16/21: Started the refactor. Expect pushes this year! I have learned quite a bit.
+
 ## Important features
 
 * Easy integration into even enterprise-level build tools
